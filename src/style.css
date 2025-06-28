@@ -445,3 +445,34 @@ h1 {
 .color-swap-control label {
     margin: 5px 0;
 }
+
+.mask-control {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0;
+    padding: 10px;
+    background: #333;
+    border-radius: 4px;
+}
+
+.mask-control.active {
+    display: flex;
+}
+
+.mask-control-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.mask-control-row label {
+    margin: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mask-control-row span {
+    color: #4a90e2;
+}

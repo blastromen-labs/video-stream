@@ -43,6 +43,11 @@ let colorSwapEnabled = false;
 let colorSwapSource = '#ff0000';
 let colorSwapTarget = '#000000';
 let colorSwapThreshold = 30;
+let maskEnabled = false;
+let maskX = 0;
+let maskY = 0;
+let maskWidth = 25;
+let maskHeight = 25;
 
 const video = document.getElementById('preview');
 const canvas = document.getElementById('processCanvas');
@@ -82,7 +87,11 @@ const DEFAULT_VALUES = {
     'oneBitThreshold': 128,
     'gaussianMid': 50,     // 0.5
     'gaussianSpread': 25,  // 0.25
-    'gaussianStrength': 50 // 0.5
+    'gaussianStrength': 50, // 0.5
+    'maskX': 0,
+    'maskY': 0,
+    'maskWidth': 25,
+    'maskHeight': 25
 };
 
 // Add double-click handlers to all sliders
@@ -153,6 +162,22 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                 case 'gaussianStrength':
                     gaussianStrength = DEFAULT_VALUES[id] / 100;
                     document.getElementById('gaussianStrengthValue').textContent = gaussianStrength.toFixed(2);
+                    break;
+                case 'maskX':
+                    maskX = DEFAULT_VALUES[id];
+                    document.getElementById('maskXValue').textContent = maskX;
+                    break;
+                case 'maskY':
+                    maskY = DEFAULT_VALUES[id];
+                    document.getElementById('maskYValue').textContent = maskY;
+                    break;
+                case 'maskWidth':
+                    maskWidth = DEFAULT_VALUES[id];
+                    document.getElementById('maskWidthValue').textContent = maskWidth;
+                    break;
+                case 'maskHeight':
+                    maskHeight = DEFAULT_VALUES[id];
+                    document.getElementById('maskHeightValue').textContent = maskHeight;
                     break;
             }
             updateControls();
@@ -297,6 +322,26 @@ function processFrame(sourceCanvas, sourceCtx) {
                 rr = targetRGB[0];
                 gg = targetRGB[1];
                 bb = targetRGB[2];
+            }
+        }
+
+        // Apply black mask
+        if (maskEnabled) {
+            const pixelIndex = (i / 4);
+            const x = pixelIndex % PANEL_WIDTH;
+            const y = Math.floor(pixelIndex / PANEL_WIDTH);
+
+            // Calculate mask boundaries in pixels
+            const maskLeft = Math.floor((maskX / 100) * PANEL_WIDTH);
+            const maskTop = Math.floor((maskY / 100) * PANEL_HEIGHT);
+            const maskRight = Math.floor(maskLeft + (maskWidth / 100) * PANEL_WIDTH);
+            const maskBottom = Math.floor(maskTop + (maskHeight / 100) * PANEL_HEIGHT);
+
+            // Check if current pixel is within mask area
+            if (x >= maskLeft && x < maskRight && y >= maskTop && y < maskBottom) {
+                rr = 0;
+                gg = 0;
+                bb = 0;
             }
         }
 
@@ -791,6 +836,23 @@ function resetControls() {
     colorSwapTarget = '#000000';
     colorSwapThreshold = 30;
 
+    // Reset mask controls
+    maskEnabled = false;
+    maskX = 0;
+    maskY = 0;
+    maskWidth = 25;
+    maskHeight = 25;
+    document.getElementById('maskEnabled').checked = false;
+    document.getElementById('maskX').value = 0;
+    document.getElementById('maskY').value = 0;
+    document.getElementById('maskWidth').value = 25;
+    document.getElementById('maskHeight').value = 25;
+    document.getElementById('maskXValue').textContent = '0';
+    document.getElementById('maskYValue').textContent = '0';
+    document.getElementById('maskWidthValue').textContent = '25';
+    document.getElementById('maskHeightValue').textContent = '25';
+    document.querySelector('.mask-control').classList.remove('active');
+
     // Reset all sliders and their displays
     document.getElementById('contrast').value = 100;
     document.getElementById('contrastValue').textContent = '1.0';
@@ -1059,6 +1121,37 @@ document.getElementById('colorSwapTarget').onchange = (event) => {
 document.getElementById('colorSwapThreshold').oninput = (event) => {
     colorSwapThreshold = parseInt(event.target.value);
     document.getElementById('colorSwapThresholdValue').textContent = colorSwapThreshold;
+    updateControls();
+};
+
+// Add mask event listeners
+document.getElementById('maskEnabled').onchange = (event) => {
+    maskEnabled = event.target.checked;
+    document.querySelector('.mask-control').classList.toggle('active', maskEnabled);
+    updateControls();
+};
+
+document.getElementById('maskX').oninput = (event) => {
+    maskX = parseInt(event.target.value);
+    document.getElementById('maskXValue').textContent = maskX;
+    updateControls();
+};
+
+document.getElementById('maskY').oninput = (event) => {
+    maskY = parseInt(event.target.value);
+    document.getElementById('maskYValue').textContent = maskY;
+    updateControls();
+};
+
+document.getElementById('maskWidth').oninput = (event) => {
+    maskWidth = parseInt(event.target.value);
+    document.getElementById('maskWidthValue').textContent = maskWidth;
+    updateControls();
+};
+
+document.getElementById('maskHeight').oninput = (event) => {
+    maskHeight = parseInt(event.target.value);
+    document.getElementById('maskHeightValue').textContent = maskHeight;
     updateControls();
 };
 
