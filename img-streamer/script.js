@@ -14,6 +14,14 @@ let frameCount = 0;
 let lastFpsTime = 0;
 let streamInterval;
 let contrast = 1.0;
+let marginX = 10; // Default 10% margin on each side
+let marginY = 5;  // Default 5% margin on top and bottom
+let yPosition = 50; // Default 50% (centered)
+let shadows = 0; // Default 0 (no adjustment)
+let midtones = 0; // Default 0 (no adjustment)
+let highlights = 0; // Default 0 (no adjustment)
+let showGuides = false; // Default false (guides hidden)
+let letterSpacing = 0.3; // Default 0.3
 
 // Get DOM elements
 const previewCanvas = document.getElementById('previewCanvas');
@@ -24,7 +32,15 @@ const textInput = document.getElementById('textInput');
 const textColor = document.getElementById('textColor');
 const previewMode = document.getElementById('previewMode');
 const fontSelect = document.getElementById('fontSelect');
+const letterSpacingSlider = document.getElementById('letterSpacing');
 const contrastSlider = document.getElementById('contrast');
+const marginXSlider = document.getElementById('marginX');
+const marginYSlider = document.getElementById('marginY');
+const yPositionSlider = document.getElementById('yPosition');
+const shadowsSlider = document.getElementById('shadows');
+const midtonesSlider = document.getElementById('midtones');
+const highlightsSlider = document.getElementById('highlights');
+const showGuidesCheckbox = document.getElementById('showGuides');
 
 // Set up canvases
 previewCanvas.width = PANEL_WIDTH;
@@ -35,6 +51,17 @@ processCanvas.height = PANEL_HEIGHT;
 // Start preview loop
 requestAnimationFrame(updatePreview);
 
+// Initialize centered indicator visibility
+const centeredIndicator = document.getElementById('centeredIndicator');
+if (yPosition === 50) {
+    centeredIndicator.style.display = 'inline';
+} else {
+    centeredIndicator.style.display = 'none';
+}
+
+// Initialize letter spacing display
+document.getElementById('letterSpacingValue').textContent = letterSpacing.toFixed(2);
+
 // Event listeners
 document.getElementById('connectButton').addEventListener('click', toggleConnection);
 document.getElementById('streamButton').addEventListener('click', toggleStreaming);
@@ -42,10 +69,64 @@ document.getElementById('stopButton').addEventListener('click', stopStreaming);
 document.getElementById('downloadBinButton').addEventListener('click', downloadBin);
 textInput.addEventListener('input', () => requestAnimationFrame(updatePreview));
 textColor.addEventListener('input', () => requestAnimationFrame(updatePreview));
-fontSelect.addEventListener('change', () => requestAnimationFrame(updatePreview));
+fontSelect.addEventListener('change', () => {
+    // Update letter spacing to font's default
+    const fontConfig = getFontConfig(fontSelect.value);
+    letterSpacing = fontConfig.letterSpacing || 0.3;
+    letterSpacingSlider.value = Math.round(letterSpacing * 100);
+    document.getElementById('letterSpacingValue').textContent = letterSpacing.toFixed(2);
+    requestAnimationFrame(updatePreview);
+});
+letterSpacingSlider.addEventListener('input', (e) => {
+    letterSpacing = parseInt(e.target.value) / 100;
+    document.getElementById('letterSpacingValue').textContent = letterSpacing.toFixed(2);
+    requestAnimationFrame(updatePreview);
+});
 contrastSlider.addEventListener('input', (e) => {
     contrast = e.target.value / 100;
     document.getElementById('contrastValue').textContent = contrast.toFixed(1);
+    requestAnimationFrame(updatePreview);
+});
+marginXSlider.addEventListener('input', (e) => {
+    marginX = parseInt(e.target.value);
+    document.getElementById('marginXValue').textContent = marginX;
+    requestAnimationFrame(updatePreview);
+});
+marginYSlider.addEventListener('input', (e) => {
+    marginY = parseInt(e.target.value);
+    document.getElementById('marginYValue').textContent = marginY;
+    requestAnimationFrame(updatePreview);
+});
+yPositionSlider.addEventListener('input', (e) => {
+    yPosition = parseInt(e.target.value);
+    document.getElementById('yPositionValue').textContent = yPosition;
+
+    // Show/hide centered indicator
+    if (yPosition === 50) {
+        centeredIndicator.style.display = 'inline';
+    } else {
+        centeredIndicator.style.display = 'none';
+    }
+
+    requestAnimationFrame(updatePreview);
+});
+shadowsSlider.addEventListener('input', (e) => {
+    shadows = parseInt(e.target.value);
+    document.getElementById('shadowsValue').textContent = shadows;
+    requestAnimationFrame(updatePreview);
+});
+midtonesSlider.addEventListener('input', (e) => {
+    midtones = parseInt(e.target.value);
+    document.getElementById('midtonesValue').textContent = midtones;
+    requestAnimationFrame(updatePreview);
+});
+highlightsSlider.addEventListener('input', (e) => {
+    highlights = parseInt(e.target.value);
+    document.getElementById('highlightsValue').textContent = highlights;
+    requestAnimationFrame(updatePreview);
+});
+showGuidesCheckbox.addEventListener('change', () => {
+    showGuides = showGuidesCheckbox.checked;
     requestAnimationFrame(updatePreview);
 });
 
@@ -104,7 +185,7 @@ function getFontConfig(fontType) {
             family: 'monospace',
             weight: 'normal',
             pixelated: false,
-            letterSpacing: 0.4,
+            letterSpacing: 0.1,
             blockStyle: true
         },
         'silkscreen': {
@@ -165,6 +246,73 @@ function adjustContrast(imageData, contrast) {
     return imageData;
 }
 
+// Function to apply tone adjustments (shadows, midtones, highlights)
+function adjustTones(imageData, shadowsVal, midtonesVal, highlightsVal) {
+    const data = imageData.data;
+
+    // Convert percentage values to adjustment factors
+    const shadowFactor = 1 + (shadowsVal / 100);
+    const midtoneFactor = 1 + (midtonesVal / 100);
+    const highlightFactor = 1 + (highlightsVal / 100);
+
+    for (let i = 0; i < data.length; i += 4) {
+        // Skip fully transparent pixels
+        if (data[i + 3] === 0) continue;
+
+        // Process each color channel
+        for (let ch = 0; ch < 3; ch++) {
+            let value = data[i + ch];
+            let normalized = value / 255;
+
+            // Calculate weights for each tone range
+            // Shadows: strong at 0, fade to 0 at 0.5
+            let shadowWeight = Math.max(0, 1 - normalized * 2);
+
+            // Midtones: peak at 0.5, fade to 0 at 0 and 1
+            let midtoneWeight = 1 - Math.abs(2 * normalized - 1);
+
+            // Highlights: 0 at 0.5, strong at 1
+            let highlightWeight = Math.max(0, normalized * 2 - 1);
+
+            // Apply adjustments based on weights
+            let adjustment = 0;
+            adjustment += (shadowFactor - 1) * shadowWeight * 128;
+            adjustment += (midtoneFactor - 1) * midtoneWeight * 128;
+            adjustment += (highlightFactor - 1) * highlightWeight * 128;
+
+            // Apply adjustment and clamp
+            data[i + ch] = Math.max(0, Math.min(255, value + adjustment));
+        }
+    }
+
+    return imageData;
+}
+
+// Function to draw center guides
+function drawGuides(ctx) {
+    if (!showGuides) return;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(76, 175, 80, 0.5)'; // Semi-transparent green
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]); // Dashed line
+
+    // Horizontal center line
+    ctx.beginPath();
+    ctx.moveTo(0, PANEL_HEIGHT / 2);
+    ctx.lineTo(PANEL_WIDTH, PANEL_HEIGHT / 2);
+    ctx.stroke();
+
+    // Visual indicator for centered position
+    if (yPosition === 50) {
+        // Draw a small center marker
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.7)';
+        ctx.fillRect(PANEL_WIDTH / 2 - 2, PANEL_HEIGHT / 2 - 2, 4, 4);
+    }
+
+    ctx.restore();
+}
+
 // Function to render text vertically
 function renderText(ctx, text, color) {
     // Clear canvas with black background
@@ -195,12 +343,12 @@ function renderText(ctx, text, color) {
     }
 
     // Calculate required height for vertical text
-    const charSpacing = fontSize * fontConfig.letterSpacing;
+    const charSpacing = fontSize * letterSpacing;
     const totalHeight = text.length * fontSize + (text.length - 1) * charSpacing;
 
     // Adjust font size to fit both width and height
-    const widthScale = PANEL_WIDTH * 0.8 / maxCharWidth; // 80% of panel width
-    const heightScale = PANEL_HEIGHT * 0.9 / totalHeight; // 90% of panel height
+    const widthScale = PANEL_WIDTH * ((100 - 2 * marginX) / 100) / maxCharWidth; // Use margin X
+    const heightScale = PANEL_HEIGHT * ((100 - 2 * marginY) / 100) / totalHeight; // Use margin Y
     const scale = Math.min(widthScale, heightScale);
 
     fontSize = Math.floor(fontSize * scale);
@@ -212,11 +360,14 @@ function renderText(ctx, text, color) {
     ctx.textBaseline = 'middle';
 
     // Recalculate with final font size
-    const finalCharSpacing = fontSize * fontConfig.letterSpacing;
+    const finalCharSpacing = fontSize * letterSpacing;
     const finalTotalHeight = text.length * fontSize + (text.length - 1) * finalCharSpacing;
 
-    // Calculate starting Y position to center vertically
-    const startY = (PANEL_HEIGHT - finalTotalHeight) / 2 + fontSize / 2;
+    // Calculate starting Y position based on yPosition percentage
+    // 0% = text starts at top edge, 100% = text ends at bottom edge
+    // -50% and 150% allow moving off-screen
+    const availableSpace = PANEL_HEIGHT - finalTotalHeight;
+    const startY = (availableSpace * yPosition / 100) + fontSize / 2;
 
     // Apply special effects for certain fonts
     if (fontConfig.glow) {
@@ -234,10 +385,15 @@ function renderText(ctx, text, color) {
             const x = PANEL_WIDTH / 2;
             const y = startY + i * (fontSize + finalCharSpacing);
 
-            // Draw background block
-            const blockWidth = maxCharWidth * scale * 0.9;
-            const blockHeight = fontSize * 0.8;
-            ctx.fillRect(x - blockWidth / 2, y - blockHeight / 2, blockWidth, blockHeight);
+            // Draw background block - ensure full character coverage
+            const blockWidth = maxCharWidth * scale; // Full character width
+            const blockHeight = fontSize; // Full font size height
+
+            // Position block to fully contain the character
+            // Text baseline is 'middle', so we need to account for ascenders
+            const blockY = y - fontSize * 0.6;
+
+            ctx.fillRect(x - blockWidth / 2, blockY, blockWidth, blockHeight);
 
             // Draw character in black
             ctx.fillStyle = '#000000';
@@ -291,6 +447,13 @@ function renderText(ctx, text, color) {
         const adjustedData = adjustContrast(imageData, (contrast - 1) * 255);
         ctx.putImageData(adjustedData, 0, 0);
     }
+
+    // Apply tone adjustments if any are set
+    if (shadows !== 0 || midtones !== 0 || highlights !== 0) {
+        const imageData = ctx.getImageData(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+        const adjustedData = adjustTones(imageData, shadows, midtones, highlights);
+        ctx.putImageData(adjustedData, 0, 0);
+    }
 }
 
 // Function to process frame and get RGB data
@@ -321,6 +484,7 @@ function updatePreview() {
     const color = textColor.value;
 
     renderText(previewCtx, text, color);
+    drawGuides(previewCtx);
 
     requestAnimationFrame(updatePreview);
 }
