@@ -27,6 +27,7 @@ let isConnected = false;
 let trimStart = 0;
 let trimEnd = 0;
 let xOffset = 0;  // -100 to 100 percentage
+let yOffset = 0;  // -100 to 100 percentage
 let colorizeColor = '#4a90e2';
 let colorizeAmount = 0;
 let colorLevels = 256;  // Number of color levels per channel
@@ -43,6 +44,14 @@ let colorSwapEnabled = false;
 let colorSwapSource = '#ff0000';
 let colorSwapTarget = '#000000';
 let colorSwapThreshold = 30;
+let maskEnabled = false;
+let maskX = 0;
+let maskY = 0;
+let maskWidth = 25;
+let maskHeight = 25;
+let pingPongMode = false;
+let isPlayingBackward = false;
+let pingPongPlaybackRate = 1;
 
 const video = document.getElementById('preview');
 const canvas = document.getElementById('processCanvas');
@@ -77,12 +86,17 @@ const DEFAULT_VALUES = {
     'green': 100,          // 100%
     'blue': 100,           // 100%
     'xOffset': 0,
+    'yOffset': 0,
     'colorizeAmount': 0,
     'colorLevels': 256,
     'oneBitThreshold': 128,
     'gaussianMid': 50,     // 0.5
     'gaussianSpread': 25,  // 0.25
-    'gaussianStrength': 50 // 0.5
+    'gaussianStrength': 50, // 0.5
+    'maskX': 0,
+    'maskY': 0,
+    'maskWidth': 25,
+    'maskHeight': 25
 };
 
 // Add double-click handlers to all sliders
@@ -130,6 +144,10 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                     xOffset = DEFAULT_VALUES[id];
                     document.getElementById('xOffsetValue').textContent = xOffset;
                     break;
+                case 'yOffset':
+                    yOffset = DEFAULT_VALUES[id];
+                    document.getElementById('yOffsetValue').textContent = yOffset;
+                    break;
                 case 'colorizeAmount':
                     colorizeAmount = DEFAULT_VALUES[id];
                     document.getElementById('colorizeAmountValue').textContent = colorizeAmount;
@@ -153,6 +171,22 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                 case 'gaussianStrength':
                     gaussianStrength = DEFAULT_VALUES[id] / 100;
                     document.getElementById('gaussianStrengthValue').textContent = gaussianStrength.toFixed(2);
+                    break;
+                case 'maskX':
+                    maskX = DEFAULT_VALUES[id];
+                    document.getElementById('maskXValue').textContent = maskX;
+                    break;
+                case 'maskY':
+                    maskY = DEFAULT_VALUES[id];
+                    document.getElementById('maskYValue').textContent = maskY;
+                    break;
+                case 'maskWidth':
+                    maskWidth = DEFAULT_VALUES[id];
+                    document.getElementById('maskWidthValue').textContent = maskWidth;
+                    break;
+                case 'maskHeight':
+                    maskHeight = DEFAULT_VALUES[id];
+                    document.getElementById('maskHeightValue').textContent = maskHeight;
                     break;
             }
             updateControls();
@@ -300,6 +334,26 @@ function processFrame(sourceCanvas, sourceCtx) {
             }
         }
 
+        // Apply black mask
+        if (maskEnabled) {
+            const pixelIndex = (i / 4);
+            const x = pixelIndex % PANEL_WIDTH;
+            const y = Math.floor(pixelIndex / PANEL_WIDTH);
+
+            // Calculate mask boundaries in pixels
+            const maskLeft = Math.floor((maskX / 100) * PANEL_WIDTH);
+            const maskTop = Math.floor((maskY / 100) * PANEL_HEIGHT);
+            const maskRight = Math.floor(maskLeft + (maskWidth / 100) * PANEL_WIDTH);
+            const maskBottom = Math.floor(maskTop + (maskHeight / 100) * PANEL_HEIGHT);
+
+            // Check if current pixel is within mask area
+            if (x >= maskLeft && x < maskRight && y >= maskTop && y < maskBottom) {
+                rr = 0;
+                gg = 0;
+                bb = 0;
+            }
+        }
+
         // Store adjusted values
         data[i] = Math.max(0, Math.min(255, rr));
         data[i + 1] = Math.max(0, Math.min(255, gg));
@@ -324,6 +378,9 @@ function updatePreview() {
 
     const crop = calculateCrop(video.videoWidth, video.videoHeight);
 
+    // Clear the canvas before drawing to prevent trails
+    previewCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
     // Draw at panel resolution with crop
     previewCtx.drawImage(video,
         crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
@@ -332,6 +389,12 @@ function updatePreview() {
 
     // Process the frame
     processFrame(previewCanvas, previewCtx);
+
+    // Handle ping pong for preview mode (when not streaming)
+    if (pingPongMode && shouldLoop && !isStreaming && isPlayingBackward) {
+        // Continue backward playback in preview mode
+        playBackward();
+    }
 
     requestAnimationFrame(updatePreview);
 }
@@ -356,10 +419,11 @@ async function convertToBin() {
     // Calculate frames from trim points
     const startFrame = Math.floor(trimStart * TARGET_FPS);
     const endFrame = Math.floor(trimEnd * TARGET_FPS);
-    const totalFrames = endFrame - startFrame;
+    const forwardFrames = endFrame - startFrame;
+    const totalFrames = pingPongMode ? forwardFrames * 2 : forwardFrames;
     let currentFrame = 0;
 
-    // Create a buffer to hold trimmed frames
+    // Create a buffer to hold trimmed frames (double size for ping pong)
     const binData = new Uint8Array(totalFrames * FRAME_SIZE);
     let binOffset = 0;
 
@@ -383,6 +447,9 @@ async function convertToBin() {
 
             const crop = calculateCrop(video.videoWidth, video.videoHeight);
 
+            // Clear the canvas before drawing to prevent trails
+            ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
             // Draw with crop
             ctx.drawImage(video,
                 crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
@@ -403,6 +470,46 @@ async function convertToBin() {
             progressText.textContent = `${progress}%`;
         }
 
+        // If ping pong mode is enabled, add frames in reverse order
+        if (pingPongMode) {
+            document.getElementById('status').textContent = 'Converting video to binary (backward pass)...';
+
+            // Process frames backward (excluding the last frame to avoid duplication)
+            for (let i = endFrame - 2; i >= startFrame; i--) {
+                // Set video to exact frame time
+                video.currentTime = i / TARGET_FPS;
+
+                // Wait for the video to seek
+                await new Promise(resolve => {
+                    video.onseeked = resolve;
+                });
+
+                const crop = calculateCrop(video.videoWidth, video.videoHeight);
+
+                // Clear the canvas before drawing to prevent trails
+                ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+                // Draw with crop
+                ctx.drawImage(video,
+                    crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
+                    0, 0, PANEL_WIDTH, PANEL_HEIGHT
+                );
+
+                // Process the frame using the same function as preview
+                const rgbData = processFrame(canvas, ctx);
+
+                // Add to binary buffer
+                binData.set(rgbData, binOffset);
+                binOffset += rgbData.length;
+
+                // Update progress
+                currentFrame++;
+                const progress = Math.floor((currentFrame / totalFrames) * 100);
+                progressFill.style.width = `${progress}%`;
+                progressText.textContent = `${progress}%`;
+            }
+        }
+
         // Create and download the binary file
         const blob = new Blob([binData], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
@@ -411,7 +518,8 @@ async function convertToBin() {
 
         const nameWithoutExt = originalFileName.split('.')[0];
         const trimInfo = `_${trimStart.toFixed(1)}s-${trimEnd.toFixed(1)}s`;
-        a.download = `${nameWithoutExt}${trimInfo}.bin`;
+        const pingPongSuffix = pingPongMode ? '_pingpong' : '';
+        a.download = `${nameWithoutExt}${trimInfo}${pingPongSuffix}.bin`;
 
         document.body.appendChild(a);
         a.click();
@@ -445,6 +553,7 @@ document.getElementById('fileInput').onchange = (event) => {
         document.getElementById('streamButton').disabled = !isConnected;  // Only enable if connected
         document.getElementById('stopButton').disabled = true;
         document.getElementById('downloadBinButton').disabled = false;
+        isPlayingBackward = false;  // Reset ping pong state
     }
 };
 
@@ -465,6 +574,9 @@ async function streamVideo() {
             if (elapsed >= FRAME_TIME) {
                 // Process frame using our shared function
                 const crop = calculateCrop(video.videoWidth, video.videoHeight);
+
+                // Clear the canvas before drawing to prevent trails
+                ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
 
                 // Draw with crop
                 ctx.drawImage(video,
@@ -491,8 +603,11 @@ async function streamVideo() {
 
                 lastFrameTime = currentTime;
 
-                // Check if we need to loop
-                if (video.ended) {
+                // Check if we need to loop or handle ping pong
+                if (pingPongMode && shouldLoop) {
+                    // In ping pong mode, the timeupdate event handler will manage the playback
+                    // Just ensure we don't exit the streaming loop
+                } else if (video.ended || video.currentTime >= trimEnd) {
                     if (shouldLoop) {
                         video.currentTime = trimStart;
                         video.play();
@@ -527,6 +642,7 @@ document.getElementById('streamButton').onclick = () => {
     if (!port || !video.src) return;
 
     isStreaming = true;
+    isPlayingBackward = false; // Reset ping pong state
     video.currentTime = trimStart;
     video.play();
 
@@ -579,7 +695,13 @@ document.getElementById('highlights').oninput = (event) => {
 
 document.getElementById('loopVideo').onchange = (event) => {
     shouldLoop = event.target.checked;
-    video.loop = shouldLoop;
+    video.loop = shouldLoop && !pingPongMode;
+    updateControls();
+};
+
+document.getElementById('pingPongMode').onchange = (event) => {
+    pingPongMode = event.target.checked;
+    video.loop = shouldLoop && !pingPongMode;
     updateControls();
 };
 
@@ -595,7 +717,12 @@ if (!navigator.serial) {
 
 // Add video ended event handler
 video.addEventListener('ended', () => {
-    if (!shouldLoop) {
+    if (pingPongMode && shouldLoop) {
+        // In ping pong mode, start backward playback when video ends
+        isPlayingBackward = true;
+        video.pause();
+        playBackward();
+    } else if (!shouldLoop) {
         isStreaming = false;
         clearTimeout(videoLoop);
         document.getElementById('streamButton').disabled = false;
@@ -713,22 +840,63 @@ document.getElementById('trimEndNum').onchange = (event) => {
 
 // Modify the video ended event handler
 video.addEventListener('timeupdate', () => {
-    if (video.currentTime >= trimEnd) {
-        if (shouldLoop) {
-            video.currentTime = trimStart;
-        } else {
+    if (pingPongMode && shouldLoop) {
+        // Ping pong mode logic
+        if (!isPlayingBackward && video.currentTime >= trimEnd) {
+            // Reached the end, start playing backward
+            isPlayingBackward = true;
             video.pause();
-            if (isStreaming) {
-                isStreaming = false;
-                clearTimeout(videoLoop);
-                document.getElementById('streamButton').disabled = false;
-                document.getElementById('stopButton').disabled = true;
-                document.getElementById('status').className = 'info';
-                document.getElementById('status').textContent = 'Playback finished';
+            // Start backward playback
+            playBackward();
+        } else if (isPlayingBackward && video.currentTime <= trimStart) {
+            // Reached the start, start playing forward
+            isPlayingBackward = false;
+            video.currentTime = trimStart;
+            video.play();
+        }
+    } else {
+        // Normal mode
+        if (video.currentTime >= trimEnd) {
+            if (shouldLoop) {
+                video.currentTime = trimStart;
+            } else {
+                video.pause();
+                if (isStreaming) {
+                    isStreaming = false;
+                    clearTimeout(videoLoop);
+                    document.getElementById('streamButton').disabled = false;
+                    document.getElementById('stopButton').disabled = true;
+                    document.getElementById('status').className = 'info';
+                    document.getElementById('status').textContent = 'Playback finished';
+                }
             }
         }
     }
 });
+
+// Function to handle backward playback
+function playBackward() {
+    if (!isPlayingBackward) {
+        return;
+    }
+
+    // Check if we've reached the start
+    if (video.currentTime <= trimStart) {
+        isPlayingBackward = false;
+        video.currentTime = trimStart;
+        video.play();
+        return;
+    }
+
+    // Move video backward by one frame
+    const frameTime = 1 / TARGET_FPS;
+    video.currentTime = Math.max(trimStart, video.currentTime - frameTime);
+
+    // Continue backward playback if we should keep playing
+    if (shouldLoop && pingPongMode) {
+        setTimeout(() => playBackward(), FRAME_TIME);
+    }
+}
 
 // Add with other event listeners
 document.getElementById('muteVideo').onchange = (event) => {
@@ -739,6 +907,12 @@ document.getElementById('muteVideo').onchange = (event) => {
 document.getElementById('xOffset').oninput = (event) => {
     xOffset = parseInt(event.target.value);
     document.getElementById('xOffsetValue').textContent = xOffset;
+    updateControls();
+};
+
+document.getElementById('yOffset').oninput = (event) => {
+    yOffset = parseInt(event.target.value);
+    document.getElementById('yOffsetValue').textContent = yOffset;
     updateControls();
 };
 
@@ -754,6 +928,7 @@ function resetControls() {
     greenChannel = 1.0;
     blueChannel = 1.0;
     xOffset = 0;
+    yOffset = 0;
     colorizeAmount = 0;
     colorLevels = 256;
     oneBitMode = false;
@@ -791,6 +966,23 @@ function resetControls() {
     colorSwapTarget = '#000000';
     colorSwapThreshold = 30;
 
+    // Reset mask controls
+    maskEnabled = false;
+    maskX = 0;
+    maskY = 0;
+    maskWidth = 25;
+    maskHeight = 25;
+    document.getElementById('maskEnabled').checked = false;
+    document.getElementById('maskX').value = 0;
+    document.getElementById('maskY').value = 0;
+    document.getElementById('maskWidth').value = 25;
+    document.getElementById('maskHeight').value = 25;
+    document.getElementById('maskXValue').textContent = '0';
+    document.getElementById('maskYValue').textContent = '0';
+    document.getElementById('maskWidthValue').textContent = '25';
+    document.getElementById('maskHeightValue').textContent = '25';
+    document.querySelector('.mask-control').classList.remove('active');
+
     // Reset all sliders and their displays
     document.getElementById('contrast').value = 100;
     document.getElementById('contrastValue').textContent = '1.0';
@@ -818,6 +1010,9 @@ function resetControls() {
 
     document.getElementById('xOffset').value = 0;
     document.getElementById('xOffsetValue').textContent = '0';
+
+    document.getElementById('yOffset').value = 0;
+    document.getElementById('yOffsetValue').textContent = '0';
 
     document.getElementById('colorizeAmount').value = 0;
     document.getElementById('colorizeAmountValue').textContent = '0';
@@ -1062,6 +1257,37 @@ document.getElementById('colorSwapThreshold').oninput = (event) => {
     updateControls();
 };
 
+// Add mask event listeners
+document.getElementById('maskEnabled').onchange = (event) => {
+    maskEnabled = event.target.checked;
+    document.querySelector('.mask-control').classList.toggle('active', maskEnabled);
+    updateControls();
+};
+
+document.getElementById('maskX').oninput = (event) => {
+    maskX = parseInt(event.target.value);
+    document.getElementById('maskXValue').textContent = maskX;
+    updateControls();
+};
+
+document.getElementById('maskY').oninput = (event) => {
+    maskY = parseInt(event.target.value);
+    document.getElementById('maskYValue').textContent = maskY;
+    updateControls();
+};
+
+document.getElementById('maskWidth').oninput = (event) => {
+    maskWidth = parseInt(event.target.value);
+    document.getElementById('maskWidthValue').textContent = maskWidth;
+    updateControls();
+};
+
+document.getElementById('maskHeight').oninput = (event) => {
+    maskHeight = parseInt(event.target.value);
+    document.getElementById('maskHeightValue').textContent = maskHeight;
+    updateControls();
+};
+
 // Add this function back near the top with other utility functions
 function calculateCrop(videoWidth, videoHeight) {
     const videoAspect = videoWidth / videoHeight;
@@ -1073,14 +1299,14 @@ function calculateCrop(videoWidth, videoHeight) {
         // Video is wider than panel
         sourceHeight = videoHeight;
         sourceWidth = videoHeight * panelAspect;
-        sourceY = 0;
+        sourceY = 0 + (yOffset / 100 * videoHeight);
         sourceX = ((videoWidth - sourceWidth) / 2) + (xOffset / 100 * (videoWidth - sourceWidth));
     } else {
         // Video is taller than panel
         sourceWidth = videoWidth;
         sourceHeight = videoWidth / panelAspect;
         sourceX = 0;
-        sourceY = (videoHeight - sourceHeight) / 2;
+        sourceY = ((videoHeight - sourceHeight) / 2) + (yOffset / 100 * (videoHeight - sourceHeight));
     }
 
     return {
