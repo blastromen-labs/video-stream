@@ -27,6 +27,7 @@ let isConnected = false;
 let trimStart = 0;
 let trimEnd = 0;
 let xOffset = 0;  // -100 to 100 percentage
+let yOffset = 0;  // -100 to 100 percentage
 let colorizeColor = '#4a90e2';
 let colorizeAmount = 0;
 let colorLevels = 256;  // Number of color levels per channel
@@ -82,6 +83,7 @@ const DEFAULT_VALUES = {
     'green': 100,          // 100%
     'blue': 100,           // 100%
     'xOffset': 0,
+    'yOffset': 0,
     'colorizeAmount': 0,
     'colorLevels': 256,
     'oneBitThreshold': 128,
@@ -138,6 +140,10 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                 case 'xOffset':
                     xOffset = DEFAULT_VALUES[id];
                     document.getElementById('xOffsetValue').textContent = xOffset;
+                    break;
+                case 'yOffset':
+                    yOffset = DEFAULT_VALUES[id];
+                    document.getElementById('yOffsetValue').textContent = yOffset;
                     break;
                 case 'colorizeAmount':
                     colorizeAmount = DEFAULT_VALUES[id];
@@ -369,6 +375,9 @@ function updatePreview() {
 
     const crop = calculateCrop(video.videoWidth, video.videoHeight);
 
+    // Clear the canvas before drawing to prevent trails
+    previewCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
     // Draw at panel resolution with crop
     previewCtx.drawImage(video,
         crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
@@ -427,6 +436,9 @@ async function convertToBin() {
             });
 
             const crop = calculateCrop(video.videoWidth, video.videoHeight);
+
+            // Clear the canvas before drawing to prevent trails
+            ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
 
             // Draw with crop
             ctx.drawImage(video,
@@ -510,6 +522,9 @@ async function streamVideo() {
             if (elapsed >= FRAME_TIME) {
                 // Process frame using our shared function
                 const crop = calculateCrop(video.videoWidth, video.videoHeight);
+
+                // Clear the canvas before drawing to prevent trails
+                ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
 
                 // Draw with crop
                 ctx.drawImage(video,
@@ -787,6 +802,12 @@ document.getElementById('xOffset').oninput = (event) => {
     updateControls();
 };
 
+document.getElementById('yOffset').oninput = (event) => {
+    yOffset = parseInt(event.target.value);
+    document.getElementById('yOffsetValue').textContent = yOffset;
+    updateControls();
+};
+
 // Reset function to restore default values
 function resetControls() {
     // Reset all values to defaults
@@ -799,6 +820,7 @@ function resetControls() {
     greenChannel = 1.0;
     blueChannel = 1.0;
     xOffset = 0;
+    yOffset = 0;
     colorizeAmount = 0;
     colorLevels = 256;
     oneBitMode = false;
@@ -880,6 +902,9 @@ function resetControls() {
 
     document.getElementById('xOffset').value = 0;
     document.getElementById('xOffsetValue').textContent = '0';
+
+    document.getElementById('yOffset').value = 0;
+    document.getElementById('yOffsetValue').textContent = '0';
 
     document.getElementById('colorizeAmount').value = 0;
     document.getElementById('colorizeAmountValue').textContent = '0';
@@ -1166,14 +1191,14 @@ function calculateCrop(videoWidth, videoHeight) {
         // Video is wider than panel
         sourceHeight = videoHeight;
         sourceWidth = videoHeight * panelAspect;
-        sourceY = 0;
+        sourceY = 0 + (yOffset / 100 * videoHeight);
         sourceX = ((videoWidth - sourceWidth) / 2) + (xOffset / 100 * (videoWidth - sourceWidth));
     } else {
         // Video is taller than panel
         sourceWidth = videoWidth;
         sourceHeight = videoWidth / panelAspect;
         sourceX = 0;
-        sourceY = (videoHeight - sourceHeight) / 2;
+        sourceY = ((videoHeight - sourceHeight) / 2) + (yOffset / 100 * (videoHeight - sourceHeight));
     }
 
     return {
