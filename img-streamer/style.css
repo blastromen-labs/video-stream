@@ -45,6 +45,18 @@ button:disabled {
     cursor: not-allowed;
 }
 
+#downloadBinButton {
+    background-color: #2d4159;
+    color: #4a90e2;
+    border-color: #4a90e2;
+    width: 100%;
+}
+
+#downloadBinButton:hover {
+    background-color: #4a90e2;
+    color: #fff;
+}
+
 .main-container {
     display: flex;
     gap: 40px;

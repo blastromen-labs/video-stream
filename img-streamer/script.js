@@ -39,6 +39,7 @@ requestAnimationFrame(updatePreview);
 document.getElementById('connectButton').addEventListener('click', toggleConnection);
 document.getElementById('streamButton').addEventListener('click', toggleStreaming);
 document.getElementById('stopButton').addEventListener('click', stopStreaming);
+document.getElementById('downloadBinButton').addEventListener('click', downloadBin);
 textInput.addEventListener('input', () => requestAnimationFrame(updatePreview));
 textColor.addEventListener('input', () => requestAnimationFrame(updatePreview));
 fontSelect.addEventListener('change', () => requestAnimationFrame(updatePreview));
@@ -126,6 +127,20 @@ function getFontConfig(fontType) {
             pixelated: false,
             letterSpacing: 0.4,
             minSize: 8
+        },
+        'doto': {
+            family: 'Doto, sans-serif',
+            weight: '700',
+            pixelated: false,
+            letterSpacing: 0.3,
+            minSize: 8
+        },
+        'saira': {
+            family: '"Saira Stencil One", cursive',
+            weight: '400',
+            pixelated: false,
+            letterSpacing: 0.35,
+            minSize: 9
         }
     };
 
@@ -424,6 +439,47 @@ async function sendFrame() {
         frameCount = 0;
         lastFpsTime = currentTime;
     }
+}
+
+// Function to download current display as .bin file
+function downloadBin() {
+    const text = textInput.value;
+    const color = textColor.value;
+
+    if (!text) {
+        document.getElementById('status').className = 'error';
+        document.getElementById('status').textContent = 'Please enter some text';
+        return;
+    }
+
+    // Render text to process canvas
+    renderText(processCtx, text, color);
+
+    // Get RGB data
+    const rgbData = processFrame(processCtx);
+
+    // Create blob from RGB data
+    const blob = new Blob([rgbData], { type: 'application/octet-stream' });
+
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    // Generate filename with text and timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const cleanText = text.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    const filename = `text_${cleanText}_${PANEL_WIDTH}x${PANEL_HEIGHT}_${timestamp}.bin`;
+
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Update status
+    document.getElementById('status').className = 'success';
+    document.getElementById('status').textContent = `Downloaded: ${filename}`;
 }
 
 // Handle visibility change
