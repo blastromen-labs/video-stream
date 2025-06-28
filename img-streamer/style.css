@@ -217,7 +217,7 @@ input[type="checkbox"] {
 
 .preview-box h3 {
     color: #4a90e2;
-    margin: 0 0 10px 0;
+    margin: 0 0 0 0;
 }
 
 #previewCanvas {
@@ -231,4 +231,11 @@ input[type="checkbox"] {
 
 #processCanvas {
     display: none;
+}
+
+#centeredIndicator {
+    display: inline;
+    transition: opacity 0.2s ease;
+    margin-left: 8px;
+    font-size: 14px;
 }

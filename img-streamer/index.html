@@ -53,8 +53,45 @@
                     </div>
 
                     <div class="control-group">
+                        <label for="letterSpacing">Letter Spacing: <span id="letterSpacingValue">0.3</span></label>
+                        <input type="range" id="letterSpacing" min="0" max="100" value="30" step="1">
+                    </div>
+
+                    <div class="control-group">
                         <label for="contrast">Contrast: <span id="contrastValue">1.0</span></label>
                         <input type="range" id="contrast" min="0" max="200" value="100" step="10">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="marginX">Margin X: <span id="marginXValue">10</span>%</label>
+                        <input type="range" id="marginX" min="0" max="40" value="10" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="marginY">Margin Y: <span id="marginYValue">5</span>%</label>
+                        <input type="range" id="marginY" min="0" max="40" value="5" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="yPosition">Y Position: <span id="yPositionValue">50</span>% <span
+                                id="centeredIndicator" style="color: #4CAF50; font-weight: bold;">✓
+                                Centered</span></label>
+                        <input type="range" id="yPosition" min="-50" max="200" value="50" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="shadows">Shadows: <span id="shadowsValue">0</span></label>
+                        <input type="range" id="shadows" min="-100" max="100" value="0" step="5">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="midtones">Midtones: <span id="midtonesValue">0</span></label>
+                        <input type="range" id="midtones" min="-100" max="100" value="0" step="5">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="highlights">Highlights: <span id="highlightsValue">0</span></label>
+                        <input type="range" id="highlights" min="-100" max="100" value="0" step="5">
                     </div>
 
                     <div class="control-group">
@@ -65,6 +102,13 @@
                         <label class="checkbox-label">
                             <input type="checkbox" id="previewMode" checked>
                             Preview Mode
+                        </label>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="showGuides">
+                            Show Center Guides
                         </label>
                     </div>
                 </div>
