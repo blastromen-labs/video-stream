@@ -49,6 +49,9 @@ let maskX = 0;
 let maskY = 0;
 let maskWidth = 25;
 let maskHeight = 25;
+let pingPongMode = false;
+let isPlayingBackward = false;
+let pingPongPlaybackRate = 1;
 
 const video = document.getElementById('preview');
 const canvas = document.getElementById('processCanvas');
@@ -387,6 +390,12 @@ function updatePreview() {
     // Process the frame
     processFrame(previewCanvas, previewCtx);
 
+    // Handle ping pong for preview mode (when not streaming)
+    if (pingPongMode && shouldLoop && !isStreaming && isPlayingBackward) {
+        // Continue backward playback in preview mode
+        playBackward();
+    }
+
     requestAnimationFrame(updatePreview);
 }
 
@@ -410,10 +419,11 @@ async function convertToBin() {
     // Calculate frames from trim points
     const startFrame = Math.floor(trimStart * TARGET_FPS);
     const endFrame = Math.floor(trimEnd * TARGET_FPS);
-    const totalFrames = endFrame - startFrame;
+    const forwardFrames = endFrame - startFrame;
+    const totalFrames = pingPongMode ? forwardFrames * 2 : forwardFrames;
     let currentFrame = 0;
 
-    // Create a buffer to hold trimmed frames
+    // Create a buffer to hold trimmed frames (double size for ping pong)
     const binData = new Uint8Array(totalFrames * FRAME_SIZE);
     let binOffset = 0;
 
@@ -460,6 +470,46 @@ async function convertToBin() {
             progressText.textContent = `${progress}%`;
         }
 
+        // If ping pong mode is enabled, add frames in reverse order
+        if (pingPongMode) {
+            document.getElementById('status').textContent = 'Converting video to binary (backward pass)...';
+
+            // Process frames backward (excluding the last frame to avoid duplication)
+            for (let i = endFrame - 2; i >= startFrame; i--) {
+                // Set video to exact frame time
+                video.currentTime = i / TARGET_FPS;
+
+                // Wait for the video to seek
+                await new Promise(resolve => {
+                    video.onseeked = resolve;
+                });
+
+                const crop = calculateCrop(video.videoWidth, video.videoHeight);
+
+                // Clear the canvas before drawing to prevent trails
+                ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+                // Draw with crop
+                ctx.drawImage(video,
+                    crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
+                    0, 0, PANEL_WIDTH, PANEL_HEIGHT
+                );
+
+                // Process the frame using the same function as preview
+                const rgbData = processFrame(canvas, ctx);
+
+                // Add to binary buffer
+                binData.set(rgbData, binOffset);
+                binOffset += rgbData.length;
+
+                // Update progress
+                currentFrame++;
+                const progress = Math.floor((currentFrame / totalFrames) * 100);
+                progressFill.style.width = `${progress}%`;
+                progressText.textContent = `${progress}%`;
+            }
+        }
+
         // Create and download the binary file
         const blob = new Blob([binData], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
@@ -468,7 +518,8 @@ async function convertToBin() {
 
         const nameWithoutExt = originalFileName.split('.')[0];
         const trimInfo = `_${trimStart.toFixed(1)}s-${trimEnd.toFixed(1)}s`;
-        a.download = `${nameWithoutExt}${trimInfo}.bin`;
+        const pingPongSuffix = pingPongMode ? '_pingpong' : '';
+        a.download = `${nameWithoutExt}${trimInfo}${pingPongSuffix}.bin`;
 
         document.body.appendChild(a);
         a.click();
@@ -502,6 +553,7 @@ document.getElementById('fileInput').onchange = (event) => {
         document.getElementById('streamButton').disabled = !isConnected;  // Only enable if connected
         document.getElementById('stopButton').disabled = true;
         document.getElementById('downloadBinButton').disabled = false;
+        isPlayingBackward = false;  // Reset ping pong state
     }
 };
 
@@ -551,8 +603,11 @@ async function streamVideo() {
 
                 lastFrameTime = currentTime;
 
-                // Check if we need to loop
-                if (video.ended) {
+                // Check if we need to loop or handle ping pong
+                if (pingPongMode && shouldLoop) {
+                    // In ping pong mode, the timeupdate event handler will manage the playback
+                    // Just ensure we don't exit the streaming loop
+                } else if (video.ended || video.currentTime >= trimEnd) {
                     if (shouldLoop) {
                         video.currentTime = trimStart;
                         video.play();
@@ -587,6 +642,7 @@ document.getElementById('streamButton').onclick = () => {
     if (!port || !video.src) return;
 
     isStreaming = true;
+    isPlayingBackward = false; // Reset ping pong state
     video.currentTime = trimStart;
     video.play();
 
@@ -639,7 +695,13 @@ document.getElementById('highlights').oninput = (event) => {
 
 document.getElementById('loopVideo').onchange = (event) => {
     shouldLoop = event.target.checked;
-    video.loop = shouldLoop;
+    video.loop = shouldLoop && !pingPongMode;
+    updateControls();
+};
+
+document.getElementById('pingPongMode').onchange = (event) => {
+    pingPongMode = event.target.checked;
+    video.loop = shouldLoop && !pingPongMode;
     updateControls();
 };
 
@@ -655,7 +717,12 @@ if (!navigator.serial) {
 
 // Add video ended event handler
 video.addEventListener('ended', () => {
-    if (!shouldLoop) {
+    if (pingPongMode && shouldLoop) {
+        // In ping pong mode, start backward playback when video ends
+        isPlayingBackward = true;
+        video.pause();
+        playBackward();
+    } else if (!shouldLoop) {
         isStreaming = false;
         clearTimeout(videoLoop);
         document.getElementById('streamButton').disabled = false;
@@ -773,22 +840,63 @@ document.getElementById('trimEndNum').onchange = (event) => {
 
 // Modify the video ended event handler
 video.addEventListener('timeupdate', () => {
-    if (video.currentTime >= trimEnd) {
-        if (shouldLoop) {
-            video.currentTime = trimStart;
-        } else {
+    if (pingPongMode && shouldLoop) {
+        // Ping pong mode logic
+        if (!isPlayingBackward && video.currentTime >= trimEnd) {
+            // Reached the end, start playing backward
+            isPlayingBackward = true;
             video.pause();
-            if (isStreaming) {
-                isStreaming = false;
-                clearTimeout(videoLoop);
-                document.getElementById('streamButton').disabled = false;
-                document.getElementById('stopButton').disabled = true;
-                document.getElementById('status').className = 'info';
-                document.getElementById('status').textContent = 'Playback finished';
+            // Start backward playback
+            playBackward();
+        } else if (isPlayingBackward && video.currentTime <= trimStart) {
+            // Reached the start, start playing forward
+            isPlayingBackward = false;
+            video.currentTime = trimStart;
+            video.play();
+        }
+    } else {
+        // Normal mode
+        if (video.currentTime >= trimEnd) {
+            if (shouldLoop) {
+                video.currentTime = trimStart;
+            } else {
+                video.pause();
+                if (isStreaming) {
+                    isStreaming = false;
+                    clearTimeout(videoLoop);
+                    document.getElementById('streamButton').disabled = false;
+                    document.getElementById('stopButton').disabled = true;
+                    document.getElementById('status').className = 'info';
+                    document.getElementById('status').textContent = 'Playback finished';
+                }
             }
         }
     }
 });
+
+// Function to handle backward playback
+function playBackward() {
+    if (!isPlayingBackward) {
+        return;
+    }
+
+    // Check if we've reached the start
+    if (video.currentTime <= trimStart) {
+        isPlayingBackward = false;
+        video.currentTime = trimStart;
+        video.play();
+        return;
+    }
+
+    // Move video backward by one frame
+    const frameTime = 1 / TARGET_FPS;
+    video.currentTime = Math.max(trimStart, video.currentTime - frameTime);
+
+    // Continue backward playback if we should keep playing
+    if (shouldLoop && pingPongMode) {
+        setTimeout(() => playBackward(), FRAME_TIME);
+    }
+}
 
 // Add with other event listeners
 document.getElementById('muteVideo').onchange = (event) => {
