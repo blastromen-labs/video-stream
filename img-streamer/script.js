@@ -23,6 +23,14 @@ let highlights = 0; // Default 0 (no adjustment)
 let showGuides = false; // Default false (guides hidden)
 let letterSpacing = 0.3; // Default 0.3
 
+// Image mode variables
+let displayMode = 'text'; // 'text' or 'image'
+let uploadedImage = null;
+let imageXPosition = 50;
+let imageYPosition = 50;
+let imageScale = 100;
+let imageFitMode = 'fill';
+
 // Get DOM elements
 const previewCanvas = document.getElementById('previewCanvas');
 const previewCtx = previewCanvas.getContext('2d', { willReadFrequently: true });
@@ -41,6 +49,17 @@ const shadowsSlider = document.getElementById('shadows');
 const midtonesSlider = document.getElementById('midtones');
 const highlightsSlider = document.getElementById('highlights');
 const showGuidesCheckbox = document.getElementById('showGuides');
+
+// Image mode DOM elements
+const modeSelect = document.getElementById('modeSelect');
+const textControls = document.getElementById('textControls');
+const imageControls = document.getElementById('imageControls');
+const imageUpload = document.getElementById('imageUpload');
+const imageInfo = document.getElementById('imageInfo');
+const imageFitModeSelect = document.getElementById('imageFitMode');
+const imageXPositionSlider = document.getElementById('imageXPosition');
+const imageYPositionSlider = document.getElementById('imageYPosition');
+const imageScaleSlider = document.getElementById('imageScale');
 
 // Set up canvases
 previewCanvas.width = PANEL_WIDTH;
@@ -127,6 +146,59 @@ highlightsSlider.addEventListener('input', (e) => {
 });
 showGuidesCheckbox.addEventListener('change', () => {
     showGuides = showGuidesCheckbox.checked;
+    requestAnimationFrame(updatePreview);
+});
+
+// Image mode event listeners
+modeSelect.addEventListener('change', (e) => {
+    displayMode = e.target.value;
+    if (displayMode === 'text') {
+        textControls.style.display = 'block';
+        imageControls.style.display = 'none';
+    } else {
+        textControls.style.display = 'none';
+        imageControls.style.display = 'block';
+    }
+    requestAnimationFrame(updatePreview);
+});
+
+imageUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                uploadedImage = img;
+                imageInfo.textContent = `${img.width}x${img.height} - ${file.name}`;
+                requestAnimationFrame(updatePreview);
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+imageFitModeSelect.addEventListener('change', (e) => {
+    imageFitMode = e.target.value;
+    requestAnimationFrame(updatePreview);
+});
+
+imageXPositionSlider.addEventListener('input', (e) => {
+    imageXPosition = parseInt(e.target.value);
+    document.getElementById('imageXPositionValue').textContent = imageXPosition;
+    requestAnimationFrame(updatePreview);
+});
+
+imageYPositionSlider.addEventListener('input', (e) => {
+    imageYPosition = parseInt(e.target.value);
+    document.getElementById('imageYPositionValue').textContent = imageYPosition;
+    requestAnimationFrame(updatePreview);
+});
+
+imageScaleSlider.addEventListener('input', (e) => {
+    imageScale = parseInt(e.target.value);
+    document.getElementById('imageScaleValue').textContent = imageScale;
     requestAnimationFrame(updatePreview);
 });
 
@@ -456,6 +528,81 @@ function renderText(ctx, text, color) {
     }
 }
 
+// Function to render image
+function renderImage(ctx, img) {
+    // Clear canvas with black background
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+    if (!img) return;
+
+    // Calculate dimensions based on fit mode
+    let sx = 0, sy = 0, sw = img.width, sh = img.height;
+    let dx = 0, dy = 0, dw = PANEL_WIDTH, dh = PANEL_HEIGHT;
+
+    const imgAspect = img.width / img.height;
+    const canvasAspect = PANEL_WIDTH / PANEL_HEIGHT;
+
+    // Apply scale
+    const scale = imageScale / 100;
+
+    if (imageFitMode === 'fill') {
+        // Fill mode: Scale image to fill canvas, cropping if necessary
+        if (imgAspect > canvasAspect) {
+            // Image is wider - crop left and right
+            const scaledWidth = img.height * canvasAspect;
+            sx = (img.width - scaledWidth) / 2;
+            sw = scaledWidth;
+        } else {
+            // Image is taller - crop top and bottom
+            const scaledHeight = img.width / canvasAspect;
+            sy = (img.height - scaledHeight) / 2;
+            sh = scaledHeight;
+        }
+    } else if (imageFitMode === 'fit') {
+        // Fit mode: Scale image to fit within canvas, adding black bars if necessary
+        if (imgAspect > canvasAspect) {
+            // Image is wider - add black bars top and bottom
+            dh = PANEL_WIDTH / imgAspect;
+            dy = (PANEL_HEIGHT - dh) / 2;
+        } else {
+            // Image is taller - add black bars left and right
+            dw = PANEL_HEIGHT * imgAspect;
+            dx = (PANEL_WIDTH - dw) / 2;
+        }
+    }
+    // Stretch mode uses default values (full canvas)
+
+    // Apply scale to destination dimensions
+    const scaledDw = dw * scale;
+    const scaledDh = dh * scale;
+
+    // Apply position offsets
+    const offsetX = (imageXPosition - 50) / 100 * PANEL_WIDTH;
+    const offsetY = (imageYPosition - 50) / 100 * PANEL_HEIGHT;
+
+    // Center the scaled image and apply offsets
+    dx = dx + (dw - scaledDw) / 2 + offsetX;
+    dy = dy + (dh - scaledDh) / 2 + offsetY;
+
+    // Draw the image
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, scaledDw, scaledDh);
+
+    // Apply contrast adjustment if not default
+    if (contrast !== 1.0) {
+        const imageData = ctx.getImageData(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+        const adjustedData = adjustContrast(imageData, (contrast - 1) * 255);
+        ctx.putImageData(adjustedData, 0, 0);
+    }
+
+    // Apply tone adjustments if any are set
+    if (shadows !== 0 || midtones !== 0 || highlights !== 0) {
+        const imageData = ctx.getImageData(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+        const adjustedData = adjustTones(imageData, shadows, midtones, highlights);
+        ctx.putImageData(adjustedData, 0, 0);
+    }
+}
+
 // Function to process frame and get RGB data
 function processFrame(sourceCtx) {
     const imageData = sourceCtx.getImageData(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
@@ -480,10 +627,14 @@ function updatePreview() {
         return;
     }
 
-    const text = textInput.value;
-    const color = textColor.value;
+    if (displayMode === 'text') {
+        const text = textInput.value;
+        const color = textColor.value;
+        renderText(previewCtx, text, color);
+    } else if (displayMode === 'image') {
+        renderImage(previewCtx, uploadedImage);
+    }
 
-    renderText(previewCtx, text, color);
     drawGuides(previewCtx);
 
     requestAnimationFrame(updatePreview);
@@ -572,11 +723,14 @@ function stopStreaming() {
 
 // Send frame to Teensy
 async function sendFrame() {
-    const text = textInput.value;
-    const color = textColor.value;
-
-    // Render text to process canvas
-    renderText(processCtx, text, color);
+    // Render content based on display mode
+    if (displayMode === 'text') {
+        const text = textInput.value;
+        const color = textColor.value;
+        renderText(processCtx, text, color);
+    } else if (displayMode === 'image') {
+        renderImage(processCtx, uploadedImage);
+    }
 
     // Get RGB data
     const rgbData = processFrame(processCtx);
@@ -607,17 +761,39 @@ async function sendFrame() {
 
 // Function to download current display as .bin file
 function downloadBin() {
-    const text = textInput.value;
-    const color = textColor.value;
+    let filename;
 
-    if (!text) {
-        document.getElementById('status').className = 'error';
-        document.getElementById('status').textContent = 'Please enter some text';
-        return;
+    if (displayMode === 'text') {
+        const text = textInput.value;
+        const color = textColor.value;
+
+        if (!text) {
+            document.getElementById('status').className = 'error';
+            document.getElementById('status').textContent = 'Please enter some text';
+            return;
+        }
+
+        // Render text to process canvas
+        renderText(processCtx, text, color);
+
+        // Generate filename for text
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        const cleanText = text.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        filename = `text_${cleanText}_${PANEL_WIDTH}x${PANEL_HEIGHT}_${timestamp}.bin`;
+    } else if (displayMode === 'image') {
+        if (!uploadedImage) {
+            document.getElementById('status').className = 'error';
+            document.getElementById('status').textContent = 'Please upload an image';
+            return;
+        }
+
+        // Render image to process canvas
+        renderImage(processCtx, uploadedImage);
+
+        // Generate filename for image
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        filename = `image_${imageFitMode}_${PANEL_WIDTH}x${PANEL_HEIGHT}_${timestamp}.bin`;
     }
-
-    // Render text to process canvas
-    renderText(processCtx, text, color);
 
     // Get RGB data
     const rgbData = processFrame(processCtx);
@@ -628,11 +804,6 @@ function downloadBin() {
     // Create download link
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-
-    // Generate filename with text and timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const cleanText = text.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-    const filename = `text_${cleanText}_${PANEL_WIDTH}x${PANEL_HEIGHT}_${timestamp}.bin`;
 
     a.href = url;
     a.download = filename;

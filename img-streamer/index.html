@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>LED Panel Text Streamer</title>
+    <title>LED Panel Text & Image Streamer</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,7 +13,7 @@
 
 <body>
     <div class="container">
-        <h1>LED Panel Text Streamer</h1>
+        <h1>LED Panel Text & Image Streamer</h1>
 
         <div class="controls-section">
             <button id="connectButton">Connect to Teensy</button>
@@ -25,58 +25,103 @@
             <div class="controls-container">
                 <div class="controls">
                     <div class="control-group">
-                        <label for="textInput">Text to Display:</label>
-                        <input type="text" id="textInput" placeholder="Enter text here" value="HELLO">
-                    </div>
-
-                    <div class="control-group">
-                        <label for="textColor">Text Color:</label>
-                        <input type="color" id="textColor" value="#ffffff">
-                    </div>
-
-                    <div class="control-group">
-                        <label for="fontSelect">Font Style:</label>
-                        <select id="fontSelect">
-                            <option value="monospace">Monospace</option>
-                            <option value="retro">Retro Computer</option>
-                            <option value="pixel">Pixel</option>
-                            <option value="terminal">Terminal</option>
-                            <option value="arcade">Arcade</option>
-                            <option value="matrix">Matrix</option>
-                            <option value="c64">Commodore 64</option>
-                            <option value="silkscreen">Silkscreen</option>
-                            <option value="orbitron">Orbitron</option>
-                            <option value="audiowide">Audiowide</option>
-                            <option value="doto">Doto</option>
-                            <option value="saira">Saira Stencil One</option>
+                        <label for="modeSelect">Display Mode:</label>
+                        <select id="modeSelect">
+                            <option value="text">Text Mode</option>
+                            <option value="image">Image Mode</option>
                         </select>
                     </div>
 
-                    <div class="control-group">
-                        <label for="letterSpacing">Letter Spacing: <span id="letterSpacingValue">0.3</span></label>
-                        <input type="range" id="letterSpacing" min="0" max="100" value="30" step="1">
+                    <!-- Text Mode Controls -->
+                    <div id="textControls">
+                        <div class="control-group">
+                            <label for="textInput">Text to Display:</label>
+                            <input type="text" id="textInput" placeholder="Enter text here" value="HELLO">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="textColor">Text Color:</label>
+                            <input type="color" id="textColor" value="#ffffff">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="fontSelect">Font Style:</label>
+                            <select id="fontSelect">
+                                <option value="monospace">Monospace</option>
+                                <option value="retro">Retro Computer</option>
+                                <option value="pixel">Pixel</option>
+                                <option value="terminal">Terminal</option>
+                                <option value="arcade">Arcade</option>
+                                <option value="matrix">Matrix</option>
+                                <option value="c64">Commodore 64</option>
+                                <option value="silkscreen">Silkscreen</option>
+                                <option value="orbitron">Orbitron</option>
+                                <option value="audiowide">Audiowide</option>
+                                <option value="doto">Doto</option>
+                                <option value="saira">Saira Stencil One</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="letterSpacing">Letter Spacing: <span id="letterSpacingValue">0.3</span></label>
+                            <input type="range" id="letterSpacing" min="0" max="100" value="30" step="1">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="marginX">Margin X: <span id="marginXValue">10</span>%</label>
+                            <input type="range" id="marginX" min="0" max="40" value="10" step="1">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="marginY">Margin Y: <span id="marginYValue">5</span>%</label>
+                            <input type="range" id="marginY" min="0" max="40" value="5" step="1">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="yPosition">Y Position: <span id="yPositionValue">50</span>% <span
+                                    id="centeredIndicator" style="color: #4CAF50; font-weight: bold;">✓
+                                    Centered</span></label>
+                            <input type="range" id="yPosition" min="-50" max="200" value="50" step="1">
+                        </div>
                     </div>
 
+                    <!-- Image Mode Controls -->
+                    <div id="imageControls" style="display: none;">
+                        <div class="control-group">
+                            <label for="imageUpload">Upload Image:</label>
+                            <input type="file" id="imageUpload" accept="image/png,image/jpeg,image/jpg,image/bmp">
+                            <div id="imageInfo" class="info-text"></div>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="imageFitMode">Fit Mode:</label>
+                            <select id="imageFitMode">
+                                <option value="fill">Fill (Crop to fit)</option>
+                                <option value="fit">Fit (Scale with bars)</option>
+                                <option value="stretch">Stretch (Distort to fit)</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="imageXPosition">X Position: <span id="imageXPositionValue">50</span>%</label>
+                            <input type="range" id="imageXPosition" min="0" max="100" value="50" step="1">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="imageYPosition">Y Position: <span id="imageYPositionValue">50</span>%</label>
+                            <input type="range" id="imageYPosition" min="0" max="100" value="50" step="1">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="imageScale">Scale: <span id="imageScaleValue">100</span>%</label>
+                            <input type="range" id="imageScale" min="50" max="200" value="100" step="5">
+                        </div>
+                    </div>
+
+                    <!-- Shared Controls -->
                     <div class="control-group">
                         <label for="contrast">Contrast: <span id="contrastValue">1.0</span></label>
                         <input type="range" id="contrast" min="0" max="200" value="100" step="10">
-                    </div>
-
-                    <div class="control-group">
-                        <label for="marginX">Margin X: <span id="marginXValue">10</span>%</label>
-                        <input type="range" id="marginX" min="0" max="40" value="10" step="1">
-                    </div>
-
-                    <div class="control-group">
-                        <label for="marginY">Margin Y: <span id="marginYValue">5</span>%</label>
-                        <input type="range" id="marginY" min="0" max="40" value="5" step="1">
-                    </div>
-
-                    <div class="control-group">
-                        <label for="yPosition">Y Position: <span id="yPositionValue">50</span>% <span
-                                id="centeredIndicator" style="color: #4CAF50; font-weight: bold;">✓
-                                Centered</span></label>
-                        <input type="range" id="yPosition" min="-50" max="200" value="50" step="1">
                     </div>
 
                     <div class="control-group">
@@ -120,7 +165,7 @@
             <div class="preview-section">
                 <div class="preview-container">
                     <div class="preview-box">
-                        <h3>Text Display</h3>
+                        <h3>Display Preview</h3>
                         <canvas id="previewCanvas"></canvas>
                     </div>
                 </div>
