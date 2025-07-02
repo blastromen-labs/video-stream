@@ -73,6 +73,10 @@
                         <input type="range" id="blue" min="0" max="200" value="100" step="5">
                     </div>
                     <div class="control-group">
+                        <label for="hueShift">Hue Shift: <span id="hueShiftValue">0</span>°</label>
+                        <input type="range" id="hueShift" min="-180" max="180" value="0" step="1">
+                    </div>
+                    <div class="control-group">
                         <label for="xOffset">X Offset: <span id="xOffsetValue">0</span>%</label>
                         <input type="range" id="xOffset" min="-100" max="100" value="0" step="1">
                     </div>
@@ -97,6 +101,10 @@
                             <input type="checkbox" id="muteVideo">
                             Enable sound
                         </label>
+                    </div>
+                    <div class="control-group">
+                        <label for="playbackSpeed">Playback Speed: <span id="playbackSpeedValue">1.0</span>x</label>
+                        <input type="range" id="playbackSpeed" min="10" max="300" value="100" step="10">
                     </div>
                     <div class="control-group">
                         <button id="downloadBinButton" disabled>Convert & Download .bin</button>

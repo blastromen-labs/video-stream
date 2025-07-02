@@ -23,6 +23,7 @@ let highlights = 0;
 let redChannel = 1.0;
 let greenChannel = 1.0;
 let blueChannel = 1.0;
+let hueShift = 0; // -180 to 180 degrees
 let isConnected = false;
 let trimStart = 0;
 let trimEnd = 0;
@@ -52,6 +53,7 @@ let maskHeight = 25;
 let pingPongMode = false;
 let isPlayingBackward = false;
 let pingPongPlaybackRate = 1;
+let playbackSpeed = 1.0;
 
 const video = document.getElementById('preview');
 const canvas = document.getElementById('processCanvas');
@@ -85,6 +87,7 @@ const DEFAULT_VALUES = {
     'red': 100,            // 100%
     'green': 100,          // 100%
     'blue': 100,           // 100%
+    'hueShift': 0,         // 0 degrees
     'xOffset': 0,
     'yOffset': 0,
     'colorizeAmount': 0,
@@ -96,7 +99,8 @@ const DEFAULT_VALUES = {
     'maskX': 0,
     'maskY': 0,
     'maskWidth': 25,
-    'maskHeight': 25
+    'maskHeight': 25,
+    'playbackSpeed': 100   // 1.0x
 };
 
 // Add double-click handlers to all sliders
@@ -139,6 +143,10 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                 case 'blue':
                     blueChannel = DEFAULT_VALUES[id] / 100;
                     document.getElementById('blueValue').textContent = DEFAULT_VALUES[id];
+                    break;
+                case 'hueShift':
+                    hueShift = DEFAULT_VALUES[id];
+                    document.getElementById('hueShiftValue').textContent = hueShift;
                     break;
                 case 'xOffset':
                     xOffset = DEFAULT_VALUES[id];
@@ -187,6 +195,11 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                 case 'maskHeight':
                     maskHeight = DEFAULT_VALUES[id];
                     document.getElementById('maskHeightValue').textContent = maskHeight;
+                    break;
+                case 'playbackSpeed':
+                    playbackSpeed = DEFAULT_VALUES[id] / 100;
+                    document.getElementById('playbackSpeedValue').textContent = playbackSpeed.toFixed(1);
+                    video.playbackRate = playbackSpeed;
                     break;
             }
             updateControls();
@@ -264,6 +277,59 @@ function blendColorize(original, targetRGB, intensity, channel) {
     return original * (1 - intensity) + result * intensity;
 }
 
+// RGB to HSL conversion
+function rgbToHsl(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+
+    if (max === min) {
+        h = s = 0; // achromatic
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+        }
+    }
+
+    return [h * 360, s, l];
+}
+
+// HSL to RGB conversion
+function hslToRgb(h, s, l) {
+    h /= 360;
+
+    let r, g, b;
+
+    if (s === 0) {
+        r = g = b = l; // achromatic
+    } else {
+        const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1 / 6) return p + (q - p) * 6 * t;
+            if (t < 1 / 2) return q;
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+            return p;
+        };
+
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1 / 3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1 / 3);
+    }
+
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
 // Add this shared processing function
 function processFrame(sourceCanvas, sourceCtx) {
     const imageData = sourceCtx.getImageData(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
@@ -276,6 +342,19 @@ function processFrame(sourceCanvas, sourceCtx) {
         let rr = adjustPixel(data[i], contrast, brightness, redChannel);     // R
         let gg = adjustPixel(data[i + 1], contrast, brightness, greenChannel); // G
         let bb = adjustPixel(data[i + 2], contrast, brightness, blueChannel);  // B
+
+        // Apply hue shift if enabled
+        if (hueShift !== 0) {
+            const [h, s, l] = rgbToHsl(rr, gg, bb);
+            let newHue = h + hueShift;
+            // Wrap hue around 360 degrees
+            if (newHue < 0) newHue += 360;
+            if (newHue >= 360) newHue -= 360;
+            const [newR, newG, newB] = hslToRgb(newHue, s, l);
+            rr = newR;
+            gg = newG;
+            bb = newB;
+        }
 
         // Apply colorize effect after other adjustments
         if (colorizeAmount > 0) {
@@ -414,13 +493,18 @@ async function convertToBin() {
     progressBar.style.display = 'block';
     document.getElementById('downloadBinButton').disabled = true;
     document.getElementById('status').className = 'info';
-    document.getElementById('status').textContent = 'Converting video to binary...';
+    const speedInfo = playbackSpeed !== 1.0 ? ` at ${playbackSpeed.toFixed(1)}x speed` : '';
+    document.getElementById('status').textContent = `Converting video to binary${speedInfo}...`;
 
     // Calculate frames from trim points
     const startFrame = Math.floor(trimStart * TARGET_FPS);
     const endFrame = Math.floor(trimEnd * TARGET_FPS);
-    const forwardFrames = endFrame - startFrame;
-    const totalFrames = pingPongMode ? forwardFrames * 2 : forwardFrames;
+    const sourceFrames = endFrame - startFrame;
+
+    // Adjust total frames based on playback speed
+    // For slow speed (< 1.0), we output more frames; for fast speed (> 1.0), we output fewer frames
+    const adjustedFrames = Math.floor(sourceFrames / playbackSpeed);
+    const totalFrames = pingPongMode ? adjustedFrames * 2 : adjustedFrames;
     let currentFrame = 0;
 
     // Create a buffer to hold trimmed frames (double size for ping pong)
@@ -435,10 +519,14 @@ async function convertToBin() {
     }
 
     try {
-        // Process each frame within trim points
-        for (let i = startFrame; i < endFrame; i++) {
+        // Process frames based on playback speed
+        // For speed > 1.0, we skip frames; for speed < 1.0, we duplicate frames
+        for (let outputFrame = 0; outputFrame < adjustedFrames; outputFrame++) {
+            // Calculate which source frame to use based on playback speed
+            const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
+
             // Set video to exact frame time
-            video.currentTime = i / TARGET_FPS;
+            video.currentTime = sourceFrameIndex / TARGET_FPS;
 
             // Wait for the video to seek
             await new Promise(resolve => {
@@ -472,12 +560,15 @@ async function convertToBin() {
 
         // If ping pong mode is enabled, add frames in reverse order
         if (pingPongMode) {
-            document.getElementById('status').textContent = 'Converting video to binary (backward pass)...';
+            document.getElementById('status').textContent = `Converting video to binary${speedInfo} (backward pass)...`;
 
             // Process frames backward (excluding the last frame to avoid duplication)
-            for (let i = endFrame - 2; i >= startFrame; i--) {
+            for (let outputFrame = adjustedFrames - 2; outputFrame >= 0; outputFrame--) {
+                // Calculate which source frame to use based on playback speed
+                const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
+
                 // Set video to exact frame time
-                video.currentTime = i / TARGET_FPS;
+                video.currentTime = sourceFrameIndex / TARGET_FPS;
 
                 // Wait for the video to seek
                 await new Promise(resolve => {
@@ -519,7 +610,8 @@ async function convertToBin() {
         const nameWithoutExt = originalFileName.split('.')[0];
         const trimInfo = `_${trimStart.toFixed(1)}s-${trimEnd.toFixed(1)}s`;
         const pingPongSuffix = pingPongMode ? '_pingpong' : '';
-        a.download = `${nameWithoutExt}${trimInfo}${pingPongSuffix}.bin`;
+        const speedSuffix = playbackSpeed !== 1.0 ? `_${playbackSpeed.toFixed(1)}x` : '';
+        a.download = `${nameWithoutExt}${trimInfo}${speedSuffix}${pingPongSuffix}.bin`;
 
         document.body.appendChild(a);
         a.click();
@@ -534,6 +626,7 @@ async function convertToBin() {
     } finally {
         // Restore video state
         video.currentTime = originalTime;
+        video.playbackRate = playbackSpeed; // Restore playback speed
         if (wasPlaying && isStreaming) {
             video.play();
         }
@@ -644,6 +737,7 @@ document.getElementById('streamButton').onclick = () => {
     isStreaming = true;
     isPlayingBackward = false; // Reset ping pong state
     video.currentTime = trimStart;
+    video.playbackRate = playbackSpeed; // Ensure playback speed is set
     video.play();
 
     document.getElementById('streamButton').disabled = true;
@@ -732,6 +826,11 @@ video.addEventListener('ended', () => {
     }
 });
 
+// Ensure playback rate is applied when video is loaded
+video.addEventListener('loadeddata', () => {
+    video.playbackRate = playbackSpeed;
+});
+
 // Modify the updateControls function with the new processFrame function
 function updateControls() {
     if (!isStreaming && !video.paused) {
@@ -772,6 +871,12 @@ document.getElementById('green').oninput = (event) => {
 document.getElementById('blue').oninput = (event) => {
     blueChannel = event.target.value / 100;
     document.getElementById('blueValue').textContent = Math.round(blueChannel * 100);
+    updateControls();
+};
+
+document.getElementById('hueShift').oninput = (event) => {
+    hueShift = parseInt(event.target.value);
+    document.getElementById('hueShiftValue').textContent = hueShift;
     updateControls();
 };
 
@@ -852,6 +957,7 @@ video.addEventListener('timeupdate', () => {
             // Reached the start, start playing forward
             isPlayingBackward = false;
             video.currentTime = trimStart;
+            video.playbackRate = playbackSpeed; // Ensure playback speed is set
             video.play();
         }
     } else {
@@ -888,19 +994,29 @@ function playBackward() {
         return;
     }
 
-    // Move video backward by one frame
-    const frameTime = 1 / TARGET_FPS;
+    // Move video backward by one frame, adjusted for playback speed
+    const frameTime = (1 / TARGET_FPS) * playbackSpeed;
     video.currentTime = Math.max(trimStart, video.currentTime - frameTime);
 
     // Continue backward playback if we should keep playing
+    // Adjust timeout for playback speed
     if (shouldLoop && pingPongMode) {
-        setTimeout(() => playBackward(), FRAME_TIME);
+        setTimeout(() => playBackward(), FRAME_TIME / playbackSpeed);
     }
 }
 
 // Add with other event listeners
 document.getElementById('muteVideo').onchange = (event) => {
     video.muted = !event.target.checked;
+};
+
+document.getElementById('playbackSpeed').oninput = (event) => {
+    playbackSpeed = event.target.value / 100;
+    document.getElementById('playbackSpeedValue').textContent = playbackSpeed.toFixed(1);
+    video.playbackRate = playbackSpeed;
+
+    // Update ping pong playback rate
+    pingPongPlaybackRate = playbackSpeed;
 };
 
 // Add the event listener with others
@@ -927,6 +1043,7 @@ function resetControls() {
     redChannel = 1.0;
     greenChannel = 1.0;
     blueChannel = 1.0;
+    hueShift = 0;
     xOffset = 0;
     yOffset = 0;
     colorizeAmount = 0;
@@ -983,6 +1100,13 @@ function resetControls() {
     document.getElementById('maskHeightValue').textContent = '25';
     document.querySelector('.mask-control').classList.remove('active');
 
+    // Reset playback speed
+    playbackSpeed = 1.0;
+    pingPongPlaybackRate = 1.0;
+    document.getElementById('playbackSpeed').value = 100;
+    document.getElementById('playbackSpeedValue').textContent = '1.0';
+    video.playbackRate = playbackSpeed;
+
     // Reset all sliders and their displays
     document.getElementById('contrast').value = 100;
     document.getElementById('contrastValue').textContent = '1.0';
@@ -1007,6 +1131,9 @@ function resetControls() {
 
     document.getElementById('blue').value = 100;
     document.getElementById('blueValue').textContent = '100';
+
+    document.getElementById('hueShift').value = 0;
+    document.getElementById('hueShiftValue').textContent = '0';
 
     document.getElementById('xOffset').value = 0;
     document.getElementById('xOffsetValue').textContent = '0';
@@ -1044,6 +1171,7 @@ function randomizeControls() {
     redChannel = (getRandomInt(50, 150) / 100);   // 0.5 to 1.5
     greenChannel = (getRandomInt(50, 150) / 100); // 0.5 to 1.5
     blueChannel = (getRandomInt(50, 150) / 100);  // 0.5 to 1.5
+    hueShift = getRandomInt(-180, 180);           // -180 to 180 degrees
     colorizeAmount = getRandomInt(0, 100);
     colorLevels = Math.pow(2, getRandomInt(2, 8)); // 4 to 256 colors in power of 2 steps
     oneBitMode = Math.random() < 0.5;
@@ -1084,6 +1212,9 @@ function randomizeControls() {
 
     document.getElementById('blue').value = blueChannel * 100;
     document.getElementById('blueValue').textContent = Math.round(blueChannel * 100);
+
+    document.getElementById('hueShift').value = hueShift;
+    document.getElementById('hueShiftValue').textContent = hueShift;
 
     document.getElementById('colorizeAmount').value = colorizeAmount;
     document.getElementById('colorizeAmountValue').textContent = colorizeAmount;
