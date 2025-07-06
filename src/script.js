@@ -894,12 +894,15 @@ function updateTrimControls() {
     startNum.max = duration;
     endNum.max = duration;
 
-    // Set end value to duration if not set
-    if (trimEnd === 0) {
-        trimEnd = duration;
-        endSlider.value = duration;
-        endNum.value = duration.toFixed(1);
-    }
+    // Auto-update trim values to cover the whole new video
+    trimStart = 0;
+    trimEnd = duration;
+
+    // Update UI elements
+    startSlider.value = 0;
+    endSlider.value = duration;
+    startNum.value = '0.0';
+    endNum.value = duration.toFixed(1);
 }
 
 // Add these event listeners
