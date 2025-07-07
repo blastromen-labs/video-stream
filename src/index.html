@@ -7,23 +7,32 @@
 </head>
 
 <body>
-    <div class="container">
-        <h1>LED Panel Video Streamer</h1>
-
-        <div>
+    <nav class="navbar">
+        <div class="navbar-controls">
             <button id="connectButton">Connect to Teensy</button>
             <input type="file" id="fileInput" accept="video/mp4,video/quicktime" />
             <button id="streamButton" disabled>Start Streaming</button>
-            <button id="stopButton" disabled>Stop</button>
+            <button id="resetButton" class="reset-button">Reset</button>
+            <button id="randomButton" class="random-button">Random</button>
+            <button id="downloadBinButton" disabled>Convert & Download .bin</button>
         </div>
+        <div class="navbar-info">
+            <div id="status" class="info">Ready to connect...</div>
+            <div id="fps">FPS: 0</div>
+            <div id="conversionProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <span class="progress-text">0%</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
 
         <div class="main-container">
             <div class="controls-container">
                 <div class="controls">
-                    <div class="button-row">
-                        <button id="resetButton" class="reset-button">Reset</button>
-                        <button id="randomButton" class="random-button">Random</button>
-                    </div>
                     <div class="control-group">
                         <label for="contrast">Contrast: <span id="contrastValue">1.0</span></label>
                         <input type="range" id="contrast" min="0" max="200" value="100" step="10">
@@ -77,64 +86,14 @@
                         <input type="range" id="hueShift" min="-180" max="180" value="0" step="1">
                     </div>
                     <div class="control-group">
-                        <label for="xOffset">X Offset: <span id="xOffsetValue">0</span>%</label>
-                        <input type="range" id="xOffset" min="-100" max="100" value="0" step="1">
-                    </div>
-                    <div class="control-group">
-                        <label for="yOffset">Y Offset: <span id="yOffsetValue">0</span>%</label>
-                        <input type="range" id="yOffset" min="-100" max="100" value="0" step="1">
-                    </div>
-                    <div class="control-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="loopVideo" checked>
-                            Loop video
-                        </label>
-                    </div>
-                    <div class="control-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="pingPongMode">
-                            Ping Pong Mode
-                        </label>
-                    </div>
-                    <div class="control-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="muteVideo">
-                            Enable sound
-                        </label>
-                    </div>
-                    <div class="control-group">
-                        <label for="playbackSpeed">Playback Speed: <span id="playbackSpeedValue">1.0</span>x</label>
-                        <input type="range" id="playbackSpeed" min="10" max="300" value="100" step="10">
-                    </div>
-                    <div class="control-group">
-                        <button id="downloadBinButton" disabled>Convert & Download .bin</button>
-                        <div id="conversionProgress" style="display: none;">
-                            <div class="progress-bar">
-                                <div class="progress-fill"></div>
-                            </div>
-                            <span class="progress-text">0%</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label>Trim Video</label>
-                        <div class="trim-control">
-                            <label>
-                                Start:
-                                <input type="number" id="trimStartNum" min="0" step="0.1" value="0">s
-                            </label>
-                            <input type="range" id="trimStart" min="0" step="0.1" value="0">
-                        </div>
-                        <div class="trim-control">
-                            <label>
-                                End:
-                                <input type="number" id="trimEndNum" min="0" step="0.1" value="0">s
-                            </label>
-                            <input type="range" id="trimEnd" min="0" step="0.1" value="0">
+                        <label>Colorize Effect</label>
+                        <div class="colorize-control">
+                            <input type="color" id="colorizeColor" value="#4a90e2">
+                            <label>Amount: <span id="colorizeAmountValue">0</span>%</label>
+                            <input type="range" id="colorizeAmount" min="0" max="100" value="0" step="1">
                         </div>
                     </div>
                 </div>
-                <div id="status" class="info">Ready to connect...</div>
-                <div id="fps">FPS: 0</div>
             </div>
 
             <div class="preview-section">
@@ -153,15 +112,51 @@
                         <canvas id="previewCanvas"></canvas>
                     </div>
                     <div class="effects-panel">
-                        <h3>Video Effects</h3>
                         <div class="effect-group">
-                            <label>Colorize Effect</label>
-                            <div class="colorize-control">
-                                <input type="color" id="colorizeColor" value="#4a90e2">
-                                <label>Amount: <span id="colorizeAmountValue">0</span>%</label>
-                                <input type="range" id="colorizeAmount" min="0" max="100" value="0" step="1">
+                            <div class="offset-control">
+                                <label for="xOffset">X Offset: <span id="xOffsetValue">0</span>%</label>
+                                <input type="range" id="xOffset" min="-100" max="100" value="0" step="1">
+                                <label for="yOffset">Y Offset: <span id="yOffsetValue">0</span>%</label>
+                                <input type="range" id="yOffset" min="-100" max="100" value="0" step="1">
                             </div>
                         </div>
+                        <div class="effect-group">
+                            <div class="playback-control">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="loopVideo" checked>
+                                    Loop video
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="pingPongMode">
+                                    Ping Pong Mode
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="muteVideo">
+                                    Enable sound
+                                </label>
+                                <label for="playbackSpeed">Playback Speed: <span
+                                        id="playbackSpeedValue">1.0</span>x</label>
+                                <input type="range" id="playbackSpeed" min="10" max="300" value="100" step="10">
+                            </div>
+                        </div>
+                        <div class="effect-group">
+                            <label>Trim Video</label>
+                            <div class="trim-control">
+                                <label>
+                                    Start:
+                                    <input type="number" id="trimStartNum" min="0" step="0.1" value="0">s
+                                </label>
+                                <input type="range" id="trimStart" min="0" step="0.1" value="0">
+                            </div>
+                            <div class="trim-control">
+                                <label>
+                                    End:
+                                    <input type="number" id="trimEndNum" min="0" step="0.1" value="0">s
+                                </label>
+                                <input type="range" id="trimEnd" min="0" step="0.1" value="0">
+                            </div>
+                        </div>
+
                         <div class="effect-group">
                             <label for="colorLevels">Color Levels: <span id="colorLevelsValue">256</span></label>
                             <input type="range" id="colorLevels" min="2" max="256" value="256" step="1">

@@ -215,6 +215,7 @@ async function toggleConnection() {
 
             isConnected = true;
             document.getElementById('connectButton').textContent = 'Disconnect';
+            document.getElementById('connectButton').classList.add('connected');
             document.getElementById('status').className = 'success';
             document.getElementById('status').textContent = 'Connected to Teensy';
             document.getElementById('streamButton').disabled = !video.src;  // Only enable if we have a video
@@ -237,10 +238,10 @@ async function toggleConnection() {
 
             isConnected = false;
             document.getElementById('connectButton').textContent = 'Connect to Teensy';
+            document.getElementById('connectButton').classList.remove('connected');
             document.getElementById('status').className = 'info';
             document.getElementById('status').textContent = 'Disconnected from Teensy';
             document.getElementById('streamButton').disabled = true;  // Always disable when disconnected
-            document.getElementById('stopButton').disabled = true;
         } catch (error) {
             document.getElementById('status').className = 'error';
             document.getElementById('status').textContent = 'Disconnect failed: ' + error;
@@ -644,7 +645,6 @@ document.getElementById('fileInput').onchange = (event) => {
         originalFileName = file.name;  // Store the original filename
         video.src = URL.createObjectURL(file);
         document.getElementById('streamButton').disabled = !isConnected;  // Only enable if connected
-        document.getElementById('stopButton').disabled = true;
         document.getElementById('downloadBinButton').disabled = false;
         isPlayingBackward = false;  // Reset ping pong state
     }
@@ -722,39 +722,41 @@ async function streamVideo() {
         writer.releaseLock();
         if (!shouldLoop || !isStreaming) {
             video.pause();
+            document.getElementById('streamButton').textContent = 'Start Streaming';
+            document.getElementById('streamButton').classList.remove('streaming');
             document.getElementById('streamButton').disabled = false;
-            document.getElementById('stopButton').disabled = true;
             document.getElementById('status').className = 'info';
             document.getElementById('status').textContent = 'Stream ended';
         }
     }
 }
 
-// Add the stream button click handler
+// Add the stream button toggle handler
 document.getElementById('streamButton').onclick = () => {
     if (!port || !video.src) return;
 
-    isStreaming = true;
-    isPlayingBackward = false; // Reset ping pong state
-    video.currentTime = trimStart;
-    video.playbackRate = playbackSpeed; // Ensure playback speed is set
-    video.play();
+    if (!isStreaming) {
+        // Start streaming
+        isStreaming = true;
+        isPlayingBackward = false; // Reset ping pong state
+        video.currentTime = trimStart;
+        video.playbackRate = playbackSpeed; // Ensure playback speed is set
+        video.play();
 
-    document.getElementById('streamButton').disabled = true;
-    document.getElementById('stopButton').disabled = false;
-    document.getElementById('status').className = 'info';
-    document.getElementById('status').textContent = 'Streaming video...';
-    streamVideo();
-};
-
-// Add the stop button click handler
-document.getElementById('stopButton').onclick = () => {
-    isStreaming = false;
-    video.pause();
-    document.getElementById('streamButton').disabled = false;
-    document.getElementById('stopButton').disabled = true;
-    document.getElementById('status').className = 'info';
-    document.getElementById('status').textContent = 'Stream stopped';
+        document.getElementById('streamButton').textContent = 'Stop Streaming';
+        document.getElementById('streamButton').classList.add('streaming');
+        document.getElementById('status').className = 'info';
+        document.getElementById('status').textContent = 'Streaming video...';
+        streamVideo();
+    } else {
+        // Stop streaming
+        isStreaming = false;
+        video.pause();
+        document.getElementById('streamButton').textContent = 'Start Streaming';
+        document.getElementById('streamButton').classList.remove('streaming');
+        document.getElementById('status').className = 'info';
+        document.getElementById('status').textContent = 'Stream stopped';
+    }
 };
 
 document.getElementById('contrast').oninput = (event) => {
@@ -819,8 +821,9 @@ video.addEventListener('ended', () => {
     } else if (!shouldLoop) {
         isStreaming = false;
         clearTimeout(videoLoop);
+        document.getElementById('streamButton').textContent = 'Start Streaming';
+        document.getElementById('streamButton').classList.remove('streaming');
         document.getElementById('streamButton').disabled = false;
-        document.getElementById('stopButton').disabled = true;
         document.getElementById('status').className = 'info';
         document.getElementById('status').textContent = 'Playback finished';
     }
@@ -973,8 +976,9 @@ video.addEventListener('timeupdate', () => {
                 if (isStreaming) {
                     isStreaming = false;
                     clearTimeout(videoLoop);
+                    document.getElementById('streamButton').textContent = 'Start Streaming';
+                    document.getElementById('streamButton').classList.remove('streaming');
                     document.getElementById('streamButton').disabled = false;
-                    document.getElementById('stopButton').disabled = true;
                     document.getElementById('status').className = 'info';
                     document.getElementById('status').textContent = 'Playback finished';
                 }
