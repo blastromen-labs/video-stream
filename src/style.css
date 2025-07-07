@@ -171,7 +171,7 @@ body {
 }
 
 .navbar-info #status {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     padding: 6px 12px;
     border-radius: 4px;
     margin: 0;
@@ -180,7 +180,7 @@ body {
 .navbar-info #fps {
     color: #4a90e2;
     font-family: monospace;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     margin: 0;
 }
 
@@ -230,7 +230,7 @@ body {
 
     .navbar-controls button {
         padding: 8px 16px;
-        font-size: 0.9rem;
+        font-size: 0.8rem;
     }
 
     .navbar-controls #fileInput {
@@ -328,7 +328,7 @@ button:disabled {
     display: block;
     margin-bottom: 8px;
     color: #e0e0e0;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 input[type="range"] {
@@ -468,7 +468,7 @@ input[type="file"]::-webkit-file-upload-button {
 
 .preview-container {
     display: flex;
-    gap: 0px;
+    gap: 20px;
     justify-content: flex-start;
     flex-wrap: nowrap;
 }
@@ -811,7 +811,7 @@ input[type="file"]::-webkit-file-upload-button {
 
 @media (max-width: 480px) {
     .slider-row label {
-        font-size: 13px;
+        font-size: 12px;
     }
 
     .value-input {
