@@ -741,6 +741,7 @@ input[type="file"]::-webkit-file-upload-button {
     border-radius: 4px;
     color: #e0e0e0;
     font-family: monospace;
+    width: 100%;
     font-size: 12px;
     text-align: center;
     transition: border-color 0.3s ease, background-color 0.3s ease;
