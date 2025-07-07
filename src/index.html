@@ -34,24 +34,44 @@
             <div class="controls-container">
                 <div class="controls">
                     <div class="control-group">
-                        <label for="contrast">Contrast: <span id="contrastValue">1.0</span></label>
-                        <input type="range" id="contrast" min="0" max="200" value="100" step="10">
+                        <div class="slider-row">
+                            <label for="contrast">Contrast</label>
+                            <input type="range" id="contrast" min="0" max="200" value="100" step="10">
+                            <input type="number" id="contrastInput" min="0" max="200" value="100" step="10"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
-                        <label for="brightness">Brightness: <span id="brightnessValue">0</span></label>
-                        <input type="range" id="brightness" min="-100" max="100" value="0" step="5">
+                        <div class="slider-row">
+                            <label for="brightness">Brightness</label>
+                            <input type="range" id="brightness" min="-100" max="100" value="0" step="5">
+                            <input type="number" id="brightnessInput" min="-100" max="100" value="0" step="5"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
-                        <label for="shadows">Shadows: <span id="shadowsValue">0</span></label>
-                        <input type="range" id="shadows" min="-100" max="100" value="0" step="5">
+                        <div class="slider-row">
+                            <label for="shadows">Shadows</label>
+                            <input type="range" id="shadows" min="-100" max="100" value="0" step="5">
+                            <input type="number" id="shadowsInput" min="-100" max="100" value="0" step="5"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
-                        <label for="midtones">Midtones: <span id="midtonesValue">0</span></label>
-                        <input type="range" id="midtones" min="-100" max="100" value="0" step="5">
+                        <div class="slider-row">
+                            <label for="midtones">Midtones</label>
+                            <input type="range" id="midtones" min="-100" max="100" value="0" step="5">
+                            <input type="number" id="midtonesInput" min="-100" max="100" value="0" step="5"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
-                        <label for="highlights">Highlights: <span id="highlightsValue">0</span></label>
-                        <input type="range" id="highlights" min="-100" max="100" value="0" step="5">
+                        <div class="slider-row">
+                            <label for="highlights">Highlights</label>
+                            <input type="range" id="highlights" min="-100" max="100" value="0" step="5">
+                            <input type="number" id="highlightsInput" min="-100" max="100" value="0" step="5"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
                         <div class="gaussian-control">
@@ -60,37 +80,69 @@
                                 Enable Gaussian Adjustment
                             </label>
                             <div class="gaussian-sliders">
-                                <label>Midpoint: <span id="gaussianMidValue">0.5</span></label>
-                                <input type="range" id="gaussianMid" min="0" max="100" value="50" step="1">
-                                <label>Spread: <span id="gaussianSpreadValue">0.25</span></label>
-                                <input type="range" id="gaussianSpread" min="1" max="100" value="25" step="1">
-                                <label>Strength: <span id="gaussianStrengthValue">0.5</span></label>
-                                <input type="range" id="gaussianStrength" min="0" max="100" value="50" step="1">
+                                <div class="slider-row">
+                                    <label for="gaussianMid">Midpoint</label>
+                                    <input type="range" id="gaussianMid" min="0" max="100" value="50" step="1">
+                                    <input type="number" id="gaussianMidInput" min="0" max="100" value="50" step="1"
+                                        class="value-input">
+                                </div>
+                                <div class="slider-row">
+                                    <label for="gaussianSpread">Spread</label>
+                                    <input type="range" id="gaussianSpread" min="1" max="100" value="25" step="1">
+                                    <input type="number" id="gaussianSpreadInput" min="1" max="100" value="25" step="1"
+                                        class="value-input">
+                                </div>
+                                <div class="slider-row">
+                                    <label for="gaussianStrength">Strength</label>
+                                    <input type="range" id="gaussianStrength" min="0" max="100" value="50" step="1">
+                                    <input type="number" id="gaussianStrengthInput" min="0" max="100" value="50"
+                                        step="1" class="value-input">
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="control-group">
-                        <label for="red">Red Channel: <span id="redValue">100</span>%</label>
-                        <input type="range" id="red" min="0" max="200" value="100" step="5">
+                        <div class="slider-row">
+                            <label for="red">Red Channel</label>
+                            <input type="range" id="red" min="0" max="200" value="100" step="5">
+                            <input type="number" id="redInput" min="0" max="200" value="100" step="5"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
-                        <label for="green">Green Channel: <span id="greenValue">100</span>%</label>
-                        <input type="range" id="green" min="0" max="200" value="100" step="5">
+                        <div class="slider-row">
+                            <label for="green">Green Channel</label>
+                            <input type="range" id="green" min="0" max="200" value="100" step="5">
+                            <input type="number" id="greenInput" min="0" max="200" value="100" step="5"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
-                        <label for="blue">Blue Channel: <span id="blueValue">100</span>%</label>
-                        <input type="range" id="blue" min="0" max="200" value="100" step="5">
+                        <div class="slider-row">
+                            <label for="blue">Blue Channel</label>
+                            <input type="range" id="blue" min="0" max="200" value="100" step="5">
+                            <input type="number" id="blueInput" min="0" max="200" value="100" step="5"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
-                        <label for="hueShift">Hue Shift: <span id="hueShiftValue">0</span>°</label>
-                        <input type="range" id="hueShift" min="-180" max="180" value="0" step="1">
+                        <div class="slider-row">
+                            <label for="hueShift">Hue Shift</label>
+                            <input type="range" id="hueShift" min="-180" max="180" value="0" step="1">
+                            <input type="number" id="hueShiftInput" min="-180" max="180" value="0" step="1"
+                                class="value-input">
+                        </div>
                     </div>
                     <div class="control-group">
                         <label>Colorize Effect</label>
                         <div class="colorize-control">
                             <input type="color" id="colorizeColor" value="#4a90e2">
-                            <label>Amount: <span id="colorizeAmountValue">0</span>%</label>
-                            <input type="range" id="colorizeAmount" min="0" max="100" value="0" step="1">
+                            <div class="slider-row">
+                                <label for="colorizeAmount">Amount</label>
+                                <input type="range" id="colorizeAmount" min="0" max="100" value="0" step="1">
+                                <input type="number" id="colorizeAmountInput" min="0" max="100" value="0" step="1"
+                                    class="value-input">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -99,7 +151,7 @@
             <div class="preview-section">
                 <div class="preview-container">
                     <div class="preview-box">
-                        <h3>Original</h3>
+                        <div class="pill-label input-label">input</div>
                         <video id="preview" controls loop muted>
                             Your browser does not support the video element.
                         </video>
@@ -108,16 +160,24 @@
                         </div>
                     </div>
                     <div class="preview-box">
-                        <h3>Processed</h3>
+                        <div class="pill-label output-label">output</div>
                         <canvas id="previewCanvas"></canvas>
                     </div>
                     <div class="effects-panel">
                         <div class="effect-group">
                             <div class="offset-control">
-                                <label for="xOffset">X Offset: <span id="xOffsetValue">0</span>%</label>
-                                <input type="range" id="xOffset" min="-100" max="100" value="0" step="1">
-                                <label for="yOffset">Y Offset: <span id="yOffsetValue">0</span>%</label>
-                                <input type="range" id="yOffset" min="-100" max="100" value="0" step="1">
+                                <div class="slider-row">
+                                    <label for="xOffset">X Offset</label>
+                                    <input type="range" id="xOffset" min="-100" max="100" value="0" step="1">
+                                    <input type="number" id="xOffsetInput" min="-100" max="100" value="0" step="1"
+                                        class="value-input">
+                                </div>
+                                <div class="slider-row">
+                                    <label for="yOffset">Y Offset</label>
+                                    <input type="range" id="yOffset" min="-100" max="100" value="0" step="1">
+                                    <input type="number" id="yOffsetInput" min="-100" max="100" value="0" step="1"
+                                        class="value-input">
+                                </div>
                             </div>
                         </div>
                         <div class="effect-group">
@@ -134,9 +194,12 @@
                                     <input type="checkbox" id="muteVideo">
                                     Enable sound
                                 </label>
-                                <label for="playbackSpeed">Playback Speed: <span
-                                        id="playbackSpeedValue">1.0</span>x</label>
-                                <input type="range" id="playbackSpeed" min="10" max="300" value="100" step="10">
+                                <div class="slider-row">
+                                    <label for="playbackSpeed">Playback Speed</label>
+                                    <input type="range" id="playbackSpeed" min="10" max="300" value="100" step="10">
+                                    <input type="number" id="playbackSpeedInput" min="10" max="300" value="100"
+                                        step="10" class="value-input">
+                                </div>
                             </div>
                         </div>
                         <div class="effect-group">
@@ -158,8 +221,12 @@
                         </div>
 
                         <div class="effect-group">
-                            <label for="colorLevels">Color Levels: <span id="colorLevelsValue">256</span></label>
-                            <input type="range" id="colorLevels" min="2" max="256" value="256" step="1">
+                            <div class="slider-row">
+                                <label for="colorLevels">Color Levels</label>
+                                <input type="range" id="colorLevels" min="2" max="256" value="256" step="1">
+                                <input type="number" id="colorLevelsInput" min="2" max="256" value="256" step="1"
+                                    class="value-input">
+                            </div>
                         </div>
                         <div class="effect-group">
                             <label class="checkbox-label">
@@ -177,8 +244,12 @@
                                 <input type="color" id="colorSwapSource" value="#ff0000">
                                 <label>Target Color:</label>
                                 <input type="color" id="colorSwapTarget" value="#000000">
-                                <label>Threshold: <span id="colorSwapThresholdValue">30</span></label>
-                                <input type="range" id="colorSwapThreshold" min="0" max="100" value="30" step="1">
+                                <div class="slider-row">
+                                    <label for="colorSwapThreshold">Threshold</label>
+                                    <input type="range" id="colorSwapThreshold" min="0" max="100" value="30" step="1">
+                                    <input type="number" id="colorSwapThresholdInput" min="0" max="100" value="30"
+                                        step="1" class="value-input">
+                                </div>
                             </div>
                         </div>
                         <div class="effect-group">
@@ -191,8 +262,12 @@
                                 <input type="color" id="primaryColor" value="#ffffff">
                                 <label>Secondary Color (dark):</label>
                                 <input type="color" id="secondaryColor" value="#000000">
-                                <label>Threshold: <span id="oneBitThresholdValue">128</span></label>
-                                <input type="range" id="oneBitThreshold" min="0" max="255" value="128" step="1">
+                                <div class="slider-row">
+                                    <label for="oneBitThreshold">Threshold</label>
+                                    <input type="range" id="oneBitThreshold" min="0" max="255" value="128" step="1">
+                                    <input type="number" id="oneBitThresholdInput" min="0" max="255" value="128"
+                                        step="1" class="value-input">
+                                </div>
                             </div>
                         </div>
                         <div class="effect-group">
@@ -201,21 +276,29 @@
                                 Black Mask
                             </label>
                             <div class="mask-control">
-                                <div class="mask-control-row">
-                                    <label>X Position: <span id="maskXValue">0</span>%</label>
+                                <div class="slider-row">
+                                    <label for="maskX">X Position</label>
                                     <input type="range" id="maskX" min="0" max="100" value="0" step="1">
+                                    <input type="number" id="maskXInput" min="0" max="100" value="0" step="1"
+                                        class="value-input">
                                 </div>
-                                <div class="mask-control-row">
-                                    <label>Y Position: <span id="maskYValue">0</span>%</label>
+                                <div class="slider-row">
+                                    <label for="maskY">Y Position</label>
                                     <input type="range" id="maskY" min="0" max="100" value="0" step="1">
+                                    <input type="number" id="maskYInput" min="0" max="100" value="0" step="1"
+                                        class="value-input">
                                 </div>
-                                <div class="mask-control-row">
-                                    <label>Width: <span id="maskWidthValue">25</span>%</label>
+                                <div class="slider-row">
+                                    <label for="maskWidth">Width</label>
                                     <input type="range" id="maskWidth" min="1" max="100" value="25" step="1">
+                                    <input type="number" id="maskWidthInput" min="1" max="100" value="25" step="1"
+                                        class="value-input">
                                 </div>
-                                <div class="mask-control-row">
-                                    <label>Height: <span id="maskHeightValue">25</span>%</label>
+                                <div class="slider-row">
+                                    <label for="maskHeight">Height</label>
                                     <input type="range" id="maskHeight" min="1" max="100" value="25" step="1">
+                                    <input type="number" id="maskHeightInput" min="1" max="100" value="25" step="1"
+                                        class="value-input">
                                 </div>
                             </div>
                         </div>

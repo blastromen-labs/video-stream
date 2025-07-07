@@ -221,91 +221,91 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
             switch (id) {
                 case 'contrast':
                     contrast = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('contrastValue').textContent = contrast.toFixed(1);
+                    syncSliderInput('contrast', 'contrastInput', DEFAULT_VALUES[id]);
                     break;
                 case 'brightness':
                     brightness = DEFAULT_VALUES[id];
-                    document.getElementById('brightnessValue').textContent = brightness;
+                    syncSliderInput('brightness', 'brightnessInput', DEFAULT_VALUES[id]);
                     break;
                 case 'shadows':
                     shadows = DEFAULT_VALUES[id];
-                    document.getElementById('shadowsValue').textContent = shadows;
+                    syncSliderInput('shadows', 'shadowsInput', DEFAULT_VALUES[id]);
                     break;
                 case 'midtones':
                     midtones = DEFAULT_VALUES[id];
-                    document.getElementById('midtonesValue').textContent = midtones;
+                    syncSliderInput('midtones', 'midtonesInput', DEFAULT_VALUES[id]);
                     break;
                 case 'highlights':
                     highlights = DEFAULT_VALUES[id];
-                    document.getElementById('highlightsValue').textContent = highlights;
+                    syncSliderInput('highlights', 'highlightsInput', DEFAULT_VALUES[id]);
                     break;
                 case 'red':
                     redChannel = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('redValue').textContent = DEFAULT_VALUES[id];
+                    syncSliderInput('red', 'redInput', DEFAULT_VALUES[id]);
                     break;
                 case 'green':
                     greenChannel = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('greenValue').textContent = DEFAULT_VALUES[id];
+                    syncSliderInput('green', 'greenInput', DEFAULT_VALUES[id]);
                     break;
                 case 'blue':
                     blueChannel = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('blueValue').textContent = DEFAULT_VALUES[id];
+                    syncSliderInput('blue', 'blueInput', DEFAULT_VALUES[id]);
                     break;
                 case 'hueShift':
                     hueShift = DEFAULT_VALUES[id];
-                    document.getElementById('hueShiftValue').textContent = hueShift;
+                    syncSliderInput('hueShift', 'hueShiftInput', DEFAULT_VALUES[id]);
                     break;
                 case 'xOffset':
                     xOffset = DEFAULT_VALUES[id];
-                    document.getElementById('xOffsetValue').textContent = xOffset;
+                    syncSliderInput('xOffset', 'xOffsetInput', DEFAULT_VALUES[id]);
                     break;
                 case 'yOffset':
                     yOffset = DEFAULT_VALUES[id];
-                    document.getElementById('yOffsetValue').textContent = yOffset;
+                    syncSliderInput('yOffset', 'yOffsetInput', DEFAULT_VALUES[id]);
                     break;
                 case 'colorizeAmount':
                     colorizeAmount = DEFAULT_VALUES[id];
-                    document.getElementById('colorizeAmountValue').textContent = colorizeAmount;
+                    syncSliderInput('colorizeAmount', 'colorizeAmountInput', DEFAULT_VALUES[id]);
                     break;
                 case 'colorLevels':
                     colorLevels = DEFAULT_VALUES[id];
-                    document.getElementById('colorLevelsValue').textContent = colorLevels;
+                    syncSliderInput('colorLevels', 'colorLevelsInput', DEFAULT_VALUES[id]);
                     break;
                 case 'oneBitThreshold':
                     oneBitThreshold = DEFAULT_VALUES[id];
-                    document.getElementById('oneBitThresholdValue').textContent = oneBitThreshold;
+                    syncSliderInput('oneBitThreshold', 'oneBitThresholdInput', DEFAULT_VALUES[id]);
                     break;
                 case 'gaussianMid':
                     gaussianMid = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('gaussianMidValue').textContent = gaussianMid.toFixed(2);
+                    syncSliderInput('gaussianMid', 'gaussianMidInput', DEFAULT_VALUES[id]);
                     break;
                 case 'gaussianSpread':
                     gaussianSpread = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('gaussianSpreadValue').textContent = gaussianSpread.toFixed(2);
+                    syncSliderInput('gaussianSpread', 'gaussianSpreadInput', DEFAULT_VALUES[id]);
                     break;
                 case 'gaussianStrength':
                     gaussianStrength = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('gaussianStrengthValue').textContent = gaussianStrength.toFixed(2);
+                    syncSliderInput('gaussianStrength', 'gaussianStrengthInput', DEFAULT_VALUES[id]);
                     break;
                 case 'maskX':
                     maskX = DEFAULT_VALUES[id];
-                    document.getElementById('maskXValue').textContent = maskX;
+                    syncSliderInput('maskX', 'maskXInput', DEFAULT_VALUES[id]);
                     break;
                 case 'maskY':
                     maskY = DEFAULT_VALUES[id];
-                    document.getElementById('maskYValue').textContent = maskY;
+                    syncSliderInput('maskY', 'maskYInput', DEFAULT_VALUES[id]);
                     break;
                 case 'maskWidth':
                     maskWidth = DEFAULT_VALUES[id];
-                    document.getElementById('maskWidthValue').textContent = maskWidth;
+                    syncSliderInput('maskWidth', 'maskWidthInput', DEFAULT_VALUES[id]);
                     break;
                 case 'maskHeight':
                     maskHeight = DEFAULT_VALUES[id];
-                    document.getElementById('maskHeightValue').textContent = maskHeight;
+                    syncSliderInput('maskHeight', 'maskHeightInput', DEFAULT_VALUES[id]);
                     break;
                 case 'playbackSpeed':
                     playbackSpeed = DEFAULT_VALUES[id] / 100;
-                    document.getElementById('playbackSpeedValue').textContent = playbackSpeed.toFixed(1);
+                    syncSliderInput('playbackSpeed', 'playbackSpeedInput', DEFAULT_VALUES[id]);
                     video.playbackRate = playbackSpeed;
                     break;
             }
@@ -858,35 +858,36 @@ document.getElementById('streamButton').onclick = () => {
     }
 };
 
-document.getElementById('contrast').oninput = (event) => {
-    contrast = event.target.value / 100;
-    document.getElementById('contrastValue').textContent = contrast.toFixed(1);
-    updateControls();
-};
+// Set up synchronized slider-input pairs
+addSliderInputSync('contrast', 'contrastInput',
+    (value) => { contrast = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
-document.getElementById('brightness').oninput = (event) => {
-    brightness = parseInt(event.target.value);
-    document.getElementById('brightnessValue').textContent = brightness;
-    updateControls();
-};
+addSliderInputSync('brightness', 'brightnessInput',
+    (value) => { brightness = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-document.getElementById('shadows').oninput = (event) => {
-    shadows = parseInt(event.target.value);
-    document.getElementById('shadowsValue').textContent = shadows;
-    updateControls();
-};
+addSliderInputSync('shadows', 'shadowsInput',
+    (value) => { shadows = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-document.getElementById('midtones').oninput = (event) => {
-    midtones = parseInt(event.target.value);
-    document.getElementById('midtonesValue').textContent = midtones;
-    updateControls();
-};
+addSliderInputSync('midtones', 'midtonesInput',
+    (value) => { midtones = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-document.getElementById('highlights').oninput = (event) => {
-    highlights = parseInt(event.target.value);
-    document.getElementById('highlightsValue').textContent = highlights;
-    updateControls();
-};
+addSliderInputSync('highlights', 'highlightsInput',
+    (value) => { highlights = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
 document.getElementById('loopVideo').onchange = (event) => {
     shouldLoop = event.target.checked;
@@ -933,30 +934,30 @@ video.addEventListener('loadeddata', () => {
     video.playbackRate = playbackSpeed;
 });
 
-// Add event listeners for the RGB controls
-document.getElementById('red').oninput = (event) => {
-    redChannel = event.target.value / 100;
-    document.getElementById('redValue').textContent = Math.round(redChannel * 100);
-    updateControls();
-};
+// Set up RGB channel synchronized sliders
+addSliderInputSync('red', 'redInput',
+    (value) => { redChannel = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
-document.getElementById('green').oninput = (event) => {
-    greenChannel = event.target.value / 100;
-    document.getElementById('greenValue').textContent = Math.round(greenChannel * 100);
-    updateControls();
-};
+addSliderInputSync('green', 'greenInput',
+    (value) => { greenChannel = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
-document.getElementById('blue').oninput = (event) => {
-    blueChannel = event.target.value / 100;
-    document.getElementById('blueValue').textContent = Math.round(blueChannel * 100);
-    updateControls();
-};
+addSliderInputSync('blue', 'blueInput',
+    (value) => { blueChannel = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
-document.getElementById('hueShift').oninput = (event) => {
-    hueShift = parseInt(event.target.value);
-    document.getElementById('hueShiftValue').textContent = hueShift;
-    updateControls();
-};
+addSliderInputSync('hueShift', 'hueShiftInput',
+    (value) => { hueShift = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
 // Add this function to update trim controls
 function updateTrimControls() {
@@ -1092,27 +1093,28 @@ document.getElementById('muteVideo').onchange = (event) => {
     video.muted = !event.target.checked;
 };
 
-document.getElementById('playbackSpeed').oninput = (event) => {
-    playbackSpeed = event.target.value / 100;
-    document.getElementById('playbackSpeedValue').textContent = playbackSpeed.toFixed(1);
-    video.playbackRate = playbackSpeed;
+addSliderInputSync('playbackSpeed', 'playbackSpeedInput',
+    (value) => {
+        playbackSpeed = value / 100;
+        video.playbackRate = playbackSpeed;
+        pingPongPlaybackRate = playbackSpeed;
+    },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
-    // Update ping pong playback rate
-    pingPongPlaybackRate = playbackSpeed;
-};
+// Set up offset synchronized sliders
+addSliderInputSync('xOffset', 'xOffsetInput',
+    (value) => { xOffset = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-// Add the event listener with others
-document.getElementById('xOffset').oninput = (event) => {
-    xOffset = parseInt(event.target.value);
-    document.getElementById('xOffsetValue').textContent = xOffset;
-    updateControls();
-};
-
-document.getElementById('yOffset').oninput = (event) => {
-    yOffset = parseInt(event.target.value);
-    document.getElementById('yOffsetValue').textContent = yOffset;
-    updateControls();
-};
+addSliderInputSync('yOffset', 'yOffsetInput',
+    (value) => { yOffset = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
 // Reset function to restore default values
 function resetControls() {
@@ -1134,8 +1136,7 @@ function resetControls() {
     document.getElementById('oneBitMode').checked = false;
     document.getElementById('primaryColor').value = '#ffffff';
     document.getElementById('secondaryColor').value = '#000000';
-    document.getElementById('oneBitThreshold').value = 128;
-    document.getElementById('oneBitThresholdValue').textContent = '128';
+    syncSliderInput('oneBitThreshold', 'oneBitThresholdInput', 128);
     primaryColor = '#ffffff';
     secondaryColor = '#000000';
     oneBitThreshold = 128;
@@ -1143,12 +1144,9 @@ function resetControls() {
     gaussianMid = 0.5;
     gaussianSpread = 0.25;
     gaussianStrength = 0.5;
-    document.getElementById('gaussianMid').value = 50;
-    document.getElementById('gaussianSpread').value = 25;
-    document.getElementById('gaussianStrength').value = 50;
-    document.getElementById('gaussianMidValue').textContent = '0.5';
-    document.getElementById('gaussianSpreadValue').textContent = '0.25';
-    document.getElementById('gaussianStrengthValue').textContent = '0.5';
+    syncSliderInput('gaussianMid', 'gaussianMidInput', 50);
+    syncSliderInput('gaussianSpread', 'gaussianSpreadInput', 25);
+    syncSliderInput('gaussianStrength', 'gaussianStrengthInput', 50);
     gaussianEnabled = false;
     document.getElementById('gaussianEnabled').checked = false;
     document.querySelector('.gaussian-sliders').classList.remove('active');
@@ -1158,8 +1156,7 @@ function resetControls() {
     document.getElementById('colorSwapEnabled').checked = false;
     document.getElementById('colorSwapSource').value = '#ff0000';
     document.getElementById('colorSwapTarget').value = '#000000';
-    document.getElementById('colorSwapThreshold').value = 30;
-    document.getElementById('colorSwapThresholdValue').textContent = '30';
+    syncSliderInput('colorSwapThreshold', 'colorSwapThresholdInput', 30);
     document.querySelector('.color-swap-control').classList.remove('active');
     colorSwapSource = '#ff0000';
     colorSwapTarget = '#000000';
@@ -1172,64 +1169,35 @@ function resetControls() {
     maskWidth = 25;
     maskHeight = 25;
     document.getElementById('maskEnabled').checked = false;
-    document.getElementById('maskX').value = 0;
-    document.getElementById('maskY').value = 0;
-    document.getElementById('maskWidth').value = 25;
-    document.getElementById('maskHeight').value = 25;
-    document.getElementById('maskXValue').textContent = '0';
-    document.getElementById('maskYValue').textContent = '0';
-    document.getElementById('maskWidthValue').textContent = '25';
-    document.getElementById('maskHeightValue').textContent = '25';
+    syncSliderInput('maskX', 'maskXInput', 0);
+    syncSliderInput('maskY', 'maskYInput', 0);
+    syncSliderInput('maskWidth', 'maskWidthInput', 25);
+    syncSliderInput('maskHeight', 'maskHeightInput', 25);
     document.querySelector('.mask-control').classList.remove('active');
 
     // Reset playback speed
     playbackSpeed = 1.0;
     pingPongPlaybackRate = 1.0;
-    document.getElementById('playbackSpeed').value = 100;
-    document.getElementById('playbackSpeedValue').textContent = '1.0';
+    syncSliderInput('playbackSpeed', 'playbackSpeedInput', 100);
     video.playbackRate = playbackSpeed;
 
-    // Reset all sliders and their displays
-    document.getElementById('contrast').value = 100;
-    document.getElementById('contrastValue').textContent = '1.0';
+    // Reset all sliders and their input fields
+    syncSliderInput('contrast', 'contrastInput', 100);
+    syncSliderInput('brightness', 'brightnessInput', 0);
+    syncSliderInput('shadows', 'shadowsInput', 0);
+    syncSliderInput('midtones', 'midtonesInput', 0);
+    syncSliderInput('highlights', 'highlightsInput', 0);
+    syncSliderInput('red', 'redInput', 100);
+    syncSliderInput('green', 'greenInput', 100);
+    syncSliderInput('blue', 'blueInput', 100);
+    syncSliderInput('hueShift', 'hueShiftInput', 0);
+    syncSliderInput('xOffset', 'xOffsetInput', 0);
+    syncSliderInput('yOffset', 'yOffsetInput', 0);
+    syncSliderInput('colorizeAmount', 'colorizeAmountInput', 0);
+    syncSliderInput('colorLevels', 'colorLevelsInput', 256);
 
-    document.getElementById('brightness').value = 0;
-    document.getElementById('brightnessValue').textContent = '0';
-
-    document.getElementById('shadows').value = 0;
-    document.getElementById('shadowsValue').textContent = '0';
-
-    document.getElementById('midtones').value = 0;
-    document.getElementById('midtonesValue').textContent = '0';
-
-    document.getElementById('highlights').value = 0;
-    document.getElementById('highlightsValue').textContent = '0';
-
-    document.getElementById('red').value = 100;
-    document.getElementById('redValue').textContent = '100';
-
-    document.getElementById('green').value = 100;
-    document.getElementById('greenValue').textContent = '100';
-
-    document.getElementById('blue').value = 100;
-    document.getElementById('blueValue').textContent = '100';
-
-    document.getElementById('hueShift').value = 0;
-    document.getElementById('hueShiftValue').textContent = '0';
-
-    document.getElementById('xOffset').value = 0;
-    document.getElementById('xOffsetValue').textContent = '0';
-
-    document.getElementById('yOffset').value = 0;
-    document.getElementById('yOffsetValue').textContent = '0';
-
-    document.getElementById('colorizeAmount').value = 0;
-    document.getElementById('colorizeAmountValue').textContent = '0';
     document.getElementById('colorizeColor').value = '#4a90e2';
     colorizeColor = '#4a90e2';
-
-    document.getElementById('colorLevels').value = 256;
-    document.getElementById('colorLevelsValue').textContent = '256';
 
     // Update preview
     updateControls();
@@ -1267,58 +1235,33 @@ function randomizeControls() {
     document.getElementById('secondaryColor').value = secondaryColor;
 
     oneBitThreshold = getRandomInt(64, 192);
-    document.getElementById('oneBitThreshold').value = oneBitThreshold;
-    document.getElementById('oneBitThresholdValue').textContent = oneBitThreshold;
+    syncSliderInput('oneBitThreshold', 'oneBitThresholdInput', oneBitThreshold);
 
-    // Update all sliders and their displays
-    document.getElementById('contrast').value = contrast * 100;
-    document.getElementById('contrastValue').textContent = contrast.toFixed(1);
-
-    document.getElementById('brightness').value = brightness;
-    document.getElementById('brightnessValue').textContent = brightness;
-
-    document.getElementById('shadows').value = shadows;
-    document.getElementById('shadowsValue').textContent = shadows;
-
-    document.getElementById('midtones').value = midtones;
-    document.getElementById('midtonesValue').textContent = midtones;
-
-    document.getElementById('highlights').value = highlights;
-    document.getElementById('highlightsValue').textContent = highlights;
-
-    document.getElementById('red').value = redChannel * 100;
-    document.getElementById('redValue').textContent = Math.round(redChannel * 100);
-
-    document.getElementById('green').value = greenChannel * 100;
-    document.getElementById('greenValue').textContent = Math.round(greenChannel * 100);
-
-    document.getElementById('blue').value = blueChannel * 100;
-    document.getElementById('blueValue').textContent = Math.round(blueChannel * 100);
-
-    document.getElementById('hueShift').value = hueShift;
-    document.getElementById('hueShiftValue').textContent = hueShift;
-
-    document.getElementById('colorizeAmount').value = colorizeAmount;
-    document.getElementById('colorizeAmountValue').textContent = colorizeAmount;
+    // Update all sliders and their input fields
+    syncSliderInput('contrast', 'contrastInput', contrast * 100);
+    syncSliderInput('brightness', 'brightnessInput', brightness);
+    syncSliderInput('shadows', 'shadowsInput', shadows);
+    syncSliderInput('midtones', 'midtonesInput', midtones);
+    syncSliderInput('highlights', 'highlightsInput', highlights);
+    syncSliderInput('red', 'redInput', redChannel * 100);
+    syncSliderInput('green', 'greenInput', greenChannel * 100);
+    syncSliderInput('blue', 'blueInput', blueChannel * 100);
+    syncSliderInput('hueShift', 'hueShiftInput', hueShift);
+    syncSliderInput('colorizeAmount', 'colorizeAmountInput', colorizeAmount);
+    syncSliderInput('colorLevels', 'colorLevelsInput', colorLevels);
 
     // Random color
     const randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
     document.getElementById('colorizeColor').value = randomColor;
     colorizeColor = randomColor;
 
-    document.getElementById('colorLevels').value = colorLevels;
-    document.getElementById('colorLevelsValue').textContent = colorLevels;
-
     // Random Gaussian values
     gaussianMid = getRandomInt(30, 70) / 100;
     gaussianSpread = getRandomInt(10, 40) / 100;
     gaussianStrength = getRandomInt(20, 80) / 100;
-    document.getElementById('gaussianMid').value = gaussianMid * 100;
-    document.getElementById('gaussianSpread').value = gaussianSpread * 100;
-    document.getElementById('gaussianStrength').value = gaussianStrength * 100;
-    document.getElementById('gaussianMidValue').textContent = gaussianMid.toFixed(2);
-    document.getElementById('gaussianSpreadValue').textContent = gaussianSpread.toFixed(2);
-    document.getElementById('gaussianStrengthValue').textContent = gaussianStrength.toFixed(2);
+    syncSliderInput('gaussianMid', 'gaussianMidInput', gaussianMid * 100);
+    syncSliderInput('gaussianSpread', 'gaussianSpreadInput', gaussianSpread * 100);
+    syncSliderInput('gaussianStrength', 'gaussianStrengthInput', gaussianStrength * 100);
 
     // Update preview
     updateControls();
@@ -1341,8 +1284,7 @@ function randomizeControls() {
     colorSwapTarget = randomTarget;
 
     colorSwapThreshold = getRandomInt(10, 50);
-    document.getElementById('colorSwapThreshold').value = colorSwapThreshold;
-    document.getElementById('colorSwapThresholdValue').textContent = colorSwapThreshold;
+    syncSliderInput('colorSwapThreshold', 'colorSwapThresholdInput', colorSwapThreshold);
 }
 
 // Add the random button event listener
@@ -1354,18 +1296,18 @@ document.getElementById('colorizeColor').onchange = (event) => {
     updateControls();
 };
 
-document.getElementById('colorizeAmount').oninput = (event) => {
-    colorizeAmount = parseInt(event.target.value);
-    document.getElementById('colorizeAmountValue').textContent = colorizeAmount;
-    updateControls();
-};
+addSliderInputSync('colorizeAmount', 'colorizeAmountInput',
+    (value) => { colorizeAmount = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-// Add the color levels event listener
-document.getElementById('colorLevels').oninput = (event) => {
-    colorLevels = parseInt(event.target.value);
-    document.getElementById('colorLevelsValue').textContent = colorLevels;
-    updateControls();
-};
+// Set up color levels synchronized slider
+addSliderInputSync('colorLevels', 'colorLevelsInput',
+    (value) => { colorLevels = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
 // Add color reduction function
 function reduceColors(value) {
@@ -1395,11 +1337,11 @@ document.getElementById('secondaryColor').onchange = (event) => {
     updateControls();
 };
 
-document.getElementById('oneBitThreshold').oninput = (event) => {
-    oneBitThreshold = parseInt(event.target.value);
-    document.getElementById('oneBitThresholdValue').textContent = oneBitThreshold;
-    updateControls();
-};
+addSliderInputSync('oneBitThreshold', 'oneBitThresholdInput',
+    (value) => { oneBitThreshold = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
 // Update the format time function to show seconds with one decimal
 function formatTime(seconds) {
@@ -1415,24 +1357,24 @@ video.addEventListener('timeupdate', () => {
     document.getElementById('currentTime').textContent = formatTime(video.currentTime);
 });
 
-// Add event listeners
-document.getElementById('gaussianMid').oninput = (event) => {
-    gaussianMid = event.target.value / 100;
-    document.getElementById('gaussianMidValue').textContent = gaussianMid.toFixed(2);
-    updateControls();
-};
+// Set up Gaussian synchronized sliders
+addSliderInputSync('gaussianMid', 'gaussianMidInput',
+    (value) => { gaussianMid = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
-document.getElementById('gaussianSpread').oninput = (event) => {
-    gaussianSpread = event.target.value / 100;
-    document.getElementById('gaussianSpreadValue').textContent = gaussianSpread.toFixed(2);
-    updateControls();
-};
+addSliderInputSync('gaussianSpread', 'gaussianSpreadInput',
+    (value) => { gaussianSpread = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
-document.getElementById('gaussianStrength').oninput = (event) => {
-    gaussianStrength = event.target.value / 100;
-    document.getElementById('gaussianStrengthValue').textContent = gaussianStrength.toFixed(2);
-    updateControls();
-};
+addSliderInputSync('gaussianStrength', 'gaussianStrengthInput',
+    (value) => { gaussianStrength = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
 
 // Update the event listener for the toggle
 document.getElementById('gaussianEnabled').onchange = (event) => {
@@ -1464,11 +1406,11 @@ document.getElementById('colorSwapTarget').onchange = (event) => {
     updateControls();
 };
 
-document.getElementById('colorSwapThreshold').oninput = (event) => {
-    colorSwapThreshold = parseInt(event.target.value);
-    document.getElementById('colorSwapThresholdValue').textContent = colorSwapThreshold;
-    updateControls();
-};
+addSliderInputSync('colorSwapThreshold', 'colorSwapThresholdInput',
+    (value) => { colorSwapThreshold = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
 // Add mask event listeners
 document.getElementById('maskEnabled').onchange = (event) => {
@@ -1477,29 +1419,30 @@ document.getElementById('maskEnabled').onchange = (event) => {
     updateControls();
 };
 
-document.getElementById('maskX').oninput = (event) => {
-    maskX = parseInt(event.target.value);
-    document.getElementById('maskXValue').textContent = maskX;
-    updateControls();
-};
+// Set up mask synchronized sliders
+addSliderInputSync('maskX', 'maskXInput',
+    (value) => { maskX = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-document.getElementById('maskY').oninput = (event) => {
-    maskY = parseInt(event.target.value);
-    document.getElementById('maskYValue').textContent = maskY;
-    updateControls();
-};
+addSliderInputSync('maskY', 'maskYInput',
+    (value) => { maskY = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-document.getElementById('maskWidth').oninput = (event) => {
-    maskWidth = parseInt(event.target.value);
-    document.getElementById('maskWidthValue').textContent = maskWidth;
-    updateControls();
-};
+addSliderInputSync('maskWidth', 'maskWidthInput',
+    (value) => { maskWidth = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
-document.getElementById('maskHeight').oninput = (event) => {
-    maskHeight = parseInt(event.target.value);
-    document.getElementById('maskHeightValue').textContent = maskHeight;
-    updateControls();
-};
+addSliderInputSync('maskHeight', 'maskHeightInput',
+    (value) => { maskHeight = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
 
 // Add this function back near the top with other utility functions
 function calculateCrop(videoWidth, videoHeight) {
@@ -1528,4 +1471,36 @@ function calculateCrop(videoWidth, videoHeight) {
         sourceWidth,
         sourceHeight
     };
+}
+
+// Add helper function to synchronize slider and input values
+function syncSliderInput(sliderId, inputId, value, formatter = (v) => v) {
+    const slider = document.getElementById(sliderId);
+    const input = document.getElementById(inputId);
+    if (slider && input) {
+        slider.value = value;
+        input.value = formatter(value);
+    }
+}
+
+// Add helper function to create synchronized event listeners
+function addSliderInputSync(sliderId, inputId, updateFunction, formatter = (v) => v, parser = (v) => v) {
+    const slider = document.getElementById(sliderId);
+    const input = document.getElementById(inputId);
+
+    if (slider && input) {
+        slider.oninput = (event) => {
+            const value = parser(event.target.value);
+            input.value = formatter(value);
+            updateFunction(value);
+            updateControls();
+        };
+
+        input.oninput = (event) => {
+            const value = parser(event.target.value);
+            slider.value = value;
+            updateFunction(value);
+            updateControls();
+        };
+    }
 }

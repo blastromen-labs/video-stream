@@ -77,6 +77,14 @@ body {
     border-color: #f57c00;
 }
 
+.navbar-controls #streamButton:disabled {
+    background-color: #2a2a2a;
+    color: #666;
+    border-color: #444;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .navbar-controls #fileInput {
     margin: 0;
     padding: 8px 12px;
@@ -320,6 +328,7 @@ button:disabled {
     display: block;
     margin-bottom: 8px;
     color: #e0e0e0;
+    font-size: 13px;
 }
 
 input[type="range"] {
@@ -329,6 +338,11 @@ input[type="range"] {
     height: 6px;
     border-radius: 3px;
     -webkit-appearance: none;
+    transition: background-color 0.2s ease;
+}
+
+input[type="range"]:hover {
+    background-color: #4a4a4a;
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -338,6 +352,12 @@ input[type="range"]::-webkit-slider-thumb {
     background: #4a90e2;
     border-radius: 50%;
     cursor: pointer;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+    background: #5ba0f2;
+    box-shadow: 0 0 8px rgba(74, 144, 226, 0.4);
 }
 
 input[type="range"]::-moz-range-thumb {
@@ -347,6 +367,11 @@ input[type="range"]::-moz-range-thumb {
     border-radius: 50%;
     cursor: pointer;
     border: none;
+    transition: background-color 0.2s ease;
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+    background: #5ba0f2;
 }
 
 .control-group span {
@@ -359,6 +384,7 @@ input[type="range"]::-moz-range-thumb {
     align-items: center;
     gap: 8px;
     color: #e0e0e0;
+    font-size: 13px;
 }
 
 input[type="checkbox"] {
@@ -402,7 +428,7 @@ input[type="file"]::-webkit-file-upload-button {
 
 .preview-container {
     display: flex;
-    gap: 20px;
+    gap: 0px;
     justify-content: flex-start;
     flex-wrap: nowrap;
 }
@@ -412,11 +438,7 @@ input[type="file"]::-webkit-file-upload-button {
     max-width: none;
 }
 
-.preview-box h3 {
-    color: #4a90e2;
-    margin: 0 0 10px 0;
-    width: 100%;
-}
+/* Removed h3 styling - replaced with pill labels */
 
 .main-container {
     display: flex;
@@ -458,6 +480,7 @@ input[type="file"]::-webkit-file-upload-button {
 .trim-control label {
     min-width: 120px;
     margin: 0;
+    font-size: 13px;
 }
 
 /* Button row styles moved to navbar */
@@ -481,6 +504,7 @@ input[type="file"]::-webkit-file-upload-button {
 
 .colorize-control label {
     margin: 5px 0;
+    font-size: 13px;
 }
 
 .offset-control {
@@ -550,6 +574,7 @@ input[type="file"]::-webkit-file-upload-button {
 
 .one-bit-control label {
     margin: 5px 0;
+    font-size: 13px;
 }
 
 .effects-panel {
@@ -573,6 +598,7 @@ input[type="file"]::-webkit-file-upload-button {
     display: block;
     margin-bottom: 8px;
     color: #e0e0e0;
+    font-size: 13px;
 }
 
 .time-display {
@@ -604,6 +630,7 @@ input[type="file"]::-webkit-file-upload-button {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    font-size: 13px;
 }
 
 .gaussian-control span {
@@ -645,6 +672,7 @@ input[type="file"]::-webkit-file-upload-button {
 
 .color-swap-control label {
     margin: 5px 0;
+    font-size: 13px;
 }
 
 .mask-control {
@@ -676,4 +704,144 @@ input[type="file"]::-webkit-file-upload-button {
 
 .mask-control-row span {
     color: #4a90e2;
+}
+
+/* Add new slider row styles */
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+}
+
+.slider-row label {
+    flex: 0 0 100px;
+    margin: 0;
+    font-weight: 500;
+    color: #e0e0e0;
+    text-align: left;
+    font-size: 13px;
+}
+
+.slider-row input[type="range"] {
+    flex: 1;
+    margin: 0;
+    max-width: none;
+    min-width: 150px;
+}
+
+.value-input {
+    flex: 0 0 50px;
+    padding: 4px 4px;
+    background-color: #3a3a3a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-family: monospace;
+    font-size: 12px;
+    text-align: center;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+}
+
+.value-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    background-color: #404040;
+}
+
+.value-input::-webkit-outer-spin-button,
+.value-input::-webkit-inner-spin-button {
+    -webkit-appearance: auto;
+    opacity: 0;
+    height: auto;
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.value-input:hover::-webkit-outer-spin-button,
+.value-input:hover::-webkit-inner-spin-button {
+    opacity: 1;
+}
+
+.value-input[type="number"] {
+    -moz-appearance: number-input;
+}
+
+/* Responsive styles for slider rows */
+@media (max-width: 768px) {
+    .slider-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .slider-row label {
+        flex: none;
+        text-align: center;
+        font-size: 14px;
+    }
+
+    .value-input {
+        flex: none;
+        width: 100%;
+        max-width: 100px;
+        margin: 0 auto;
+    }
+
+    .controls-container {
+        flex: none;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    .main-container {
+        flex-direction: column;
+    }
+
+    .preview-section {
+        min-width: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .slider-row label {
+        font-size: 13px;
+    }
+
+    .value-input {
+        font-size: 12px;
+        padding: 4px 6px;
+    }
+
+    .controls {
+        padding: 10px;
+    }
+}
+
+/* Pill label styles */
+.pill-label {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+    text-align: center;
+    min-width: 30px;
+}
+
+.input-label {
+    background-color: #2d4159;
+    color: #4a90e2;
+    border: 1px solid #4a90e2;
+}
+
+.output-label {
+    background-color: #2d5930;
+    color: #4caf50;
+    border: 1px solid #4caf50;
 }
