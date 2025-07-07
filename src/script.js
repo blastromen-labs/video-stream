@@ -55,11 +55,26 @@ let isPlayingBackward = false;
 let pingPongPlaybackRate = 1;
 let playbackSpeed = 1.0;
 
+// Performance optimization variables
+let lastUpdateTime = 0;
+let animationFrameId = null;
+let isProcessing = false;
+const UPDATE_THROTTLE = 16; // ~60 FPS max
+
+// Optimize canvas context creation
 const video = document.getElementById('preview');
 const canvas = document.getElementById('processCanvas');
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const ctx = canvas.getContext('2d', {
+    willReadFrequently: true,
+    alpha: false,
+    desynchronized: true
+});
 const previewCanvas = document.getElementById('previewCanvas');
-const previewCtx = previewCanvas.getContext('2d', { willReadFrequently: true });
+const previewCtx = previewCanvas.getContext('2d', {
+    willReadFrequently: true,
+    alpha: false,
+    desynchronized: true
+});
 
 // Set up canvases with correct dimensions
 canvas.width = PANEL_WIDTH;
@@ -67,13 +82,105 @@ canvas.height = PANEL_HEIGHT;
 previewCanvas.width = PREVIEW_WIDTH;
 previewCanvas.height = PREVIEW_HEIGHT;
 
+// Optimized preview update function with throttling
+function updatePreview() {
+    if (isProcessing) {
+        animationFrameId = requestAnimationFrame(updatePreview);
+        return;
+    }
+
+    const now = performance.now();
+    if (now - lastUpdateTime < UPDATE_THROTTLE) {
+        animationFrameId = requestAnimationFrame(updatePreview);
+        return;
+    }
+
+    if (video.readyState < 2) {
+        animationFrameId = requestAnimationFrame(updatePreview);
+        return;
+    }
+
+    isProcessing = true;
+    lastUpdateTime = now;
+
+    try {
+        const crop = calculateCrop(video.videoWidth, video.videoHeight);
+
+        // Clear the canvas before drawing to prevent trails
+        previewCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+        // Draw at panel resolution with crop
+        previewCtx.drawImage(video,
+            crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
+            0, 0, PANEL_WIDTH, PANEL_HEIGHT
+        );
+
+        // Process the frame
+        processFrame(previewCanvas, previewCtx);
+
+        // Handle ping pong for preview mode (when not streaming)
+        if (pingPongMode && shouldLoop && !isStreaming && isPlayingBackward) {
+            // Continue backward playback in preview mode
+            playBackward();
+        }
+    } catch (error) {
+        console.warn('Preview update error:', error);
+    } finally {
+        isProcessing = false;
+    }
+
+    if (!isStreaming) {
+        animationFrameId = requestAnimationFrame(updatePreview);
+    }
+}
+
+// Throttled updateControls function
+let controlsUpdateTimeout = null;
+function updateControls() {
+    if (controlsUpdateTimeout) {
+        clearTimeout(controlsUpdateTimeout);
+    }
+
+    controlsUpdateTimeout = setTimeout(() => {
+        if (!isStreaming) {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            animationFrameId = requestAnimationFrame(updatePreview);
+        }
+    }, 8); // Small delay to batch rapid changes
+}
+
 // Start the preview loop immediately
-requestAnimationFrame(updatePreview);
+animationFrameId = requestAnimationFrame(updatePreview);
 
 // Add this to make sure preview updates when video loads
 video.addEventListener('loadedmetadata', () => {
     if (!isStreaming) {
-        requestAnimationFrame(updatePreview);
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        animationFrameId = requestAnimationFrame(updatePreview);
+    }
+});
+
+// Optimize video event listeners
+video.addEventListener('play', () => {
+    if (!isStreaming) {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        animationFrameId = requestAnimationFrame(updatePreview);
+    }
+});
+
+video.addEventListener('pause', () => {
+    // Update one last time when paused
+    if (!isStreaming) {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        animationFrameId = requestAnimationFrame(updatePreview);
     }
 });
 
@@ -331,24 +438,45 @@ function hslToRgb(h, s, l) {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-// Add this shared processing function
+// Optimize processFrame function with early returns
 function processFrame(sourceCanvas, sourceCtx) {
     const imageData = sourceCtx.getImageData(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
     const data = imageData.data;
     const rgbData = new Uint8Array(PANEL_WIDTH * PANEL_HEIGHT * 3);
     let rgbIndex = 0;
 
-    for (let i = 0; i < data.length; i += 4) {
-        // Get RGB values
-        let rr = adjustPixel(data[i], contrast, brightness, redChannel);     // R
-        let gg = adjustPixel(data[i + 1], contrast, brightness, greenChannel); // G
-        let bb = adjustPixel(data[i + 2], contrast, brightness, blueChannel);  // B
+    // Pre-calculate values that don't change per pixel
+    const hasHueShift = hueShift !== 0;
+    const hasColorize = colorizeAmount > 0;
+    const hasColorReduction = colorLevels < 256;
+    const hasColorSwap = colorSwapEnabled;
+    const hasMask = maskEnabled;
+    const targetRGB = hasColorize ? hexToRgb(colorizeColor) : null;
+    const colorizeIntensity = hasColorize ? colorizeAmount / 100 : 0;
+    const sourceRGB = hasColorSwap ? hexToRgb(colorSwapSource) : null;
+    const targetSwapRGB = hasColorSwap ? hexToRgb(colorSwapTarget) : null;
+    const primaryRGB = oneBitMode ? hexToRgb(primaryColor) : null;
+    const secondaryRGB = oneBitMode ? hexToRgb(secondaryColor) : null;
 
-        // Apply hue shift if enabled
-        if (hueShift !== 0) {
+    // Pre-calculate mask boundaries
+    let maskLeft, maskTop, maskRight, maskBottom;
+    if (hasMask) {
+        maskLeft = Math.floor((maskX / 100) * PANEL_WIDTH);
+        maskTop = Math.floor((maskY / 100) * PANEL_HEIGHT);
+        maskRight = Math.floor(maskLeft + (maskWidth / 100) * PANEL_WIDTH);
+        maskBottom = Math.floor(maskTop + (maskHeight / 100) * PANEL_HEIGHT);
+    }
+
+    for (let i = 0; i < data.length; i += 4) {
+        // Get RGB values with optimized adjustPixel calls
+        let rr = adjustPixel(data[i], contrast, brightness, redChannel);
+        let gg = adjustPixel(data[i + 1], contrast, brightness, greenChannel);
+        let bb = adjustPixel(data[i + 2], contrast, brightness, blueChannel);
+
+        // Apply hue shift if enabled (expensive operation)
+        if (hasHueShift) {
             const [h, s, l] = rgbToHsl(rr, gg, bb);
             let newHue = h + hueShift;
-            // Wrap hue around 360 degrees
             if (newHue < 0) newHue += 360;
             if (newHue >= 360) newHue -= 360;
             const [newR, newG, newB] = hslToRgb(newHue, s, l);
@@ -358,16 +486,14 @@ function processFrame(sourceCanvas, sourceCtx) {
         }
 
         // Apply colorize effect after other adjustments
-        if (colorizeAmount > 0) {
-            const targetRGB = hexToRgb(colorizeColor);
-            const intensity = colorizeAmount / 100;
-            rr = blendColorize(rr, targetRGB, intensity, redChannel);
-            gg = blendColorize(gg, targetRGB, intensity, greenChannel);
-            bb = blendColorize(bb, targetRGB, intensity, blueChannel);
+        if (hasColorize) {
+            rr = blendColorize(rr, targetRGB, colorizeIntensity, redChannel);
+            gg = blendColorize(gg, targetRGB, colorizeIntensity, greenChannel);
+            bb = blendColorize(bb, targetRGB, colorizeIntensity, blueChannel);
         }
 
         // Apply color reduction
-        if (colorLevels < 256) {
+        if (hasColorReduction) {
             rr = reduceColors(rr);
             gg = reduceColors(gg);
             bb = reduceColors(bb);
@@ -376,16 +502,14 @@ function processFrame(sourceCanvas, sourceCtx) {
         // Apply 1-bit mode
         if (oneBitMode) {
             const luminance = (rr * 0.299 + gg * 0.587 + bb * 0.114);
-            const primary = hexToRgb(primaryColor);
-            const secondary = hexToRgb(secondaryColor);
             if (luminance >= oneBitThreshold) {
-                rr = primary[0];
-                gg = primary[1];
-                bb = primary[2];
+                rr = primaryRGB[0];
+                gg = primaryRGB[1];
+                bb = primaryRGB[2];
             } else {
-                rr = secondary[0];
-                gg = secondary[1];
-                bb = secondary[2];
+                rr = secondaryRGB[0];
+                gg = secondaryRGB[1];
+                bb = secondaryRGB[2];
             }
         }
 
@@ -397,10 +521,7 @@ function processFrame(sourceCanvas, sourceCtx) {
         }
 
         // Apply color swap effect
-        if (colorSwapEnabled) {
-            const sourceRGB = hexToRgb(colorSwapSource);
-            const targetRGB = hexToRgb(colorSwapTarget);
-
+        if (hasColorSwap) {
             const colorDistance = Math.sqrt(
                 Math.pow(rr - sourceRGB[0], 2) +
                 Math.pow(gg - sourceRGB[1], 2) +
@@ -408,25 +529,18 @@ function processFrame(sourceCanvas, sourceCtx) {
             );
 
             if (colorDistance <= colorSwapThreshold) {
-                rr = targetRGB[0];
-                gg = targetRGB[1];
-                bb = targetRGB[2];
+                rr = targetSwapRGB[0];
+                gg = targetSwapRGB[1];
+                bb = targetSwapRGB[2];
             }
         }
 
         // Apply black mask
-        if (maskEnabled) {
+        if (hasMask) {
             const pixelIndex = (i / 4);
             const x = pixelIndex % PANEL_WIDTH;
             const y = Math.floor(pixelIndex / PANEL_WIDTH);
 
-            // Calculate mask boundaries in pixels
-            const maskLeft = Math.floor((maskX / 100) * PANEL_WIDTH);
-            const maskTop = Math.floor((maskY / 100) * PANEL_HEIGHT);
-            const maskRight = Math.floor(maskLeft + (maskWidth / 100) * PANEL_WIDTH);
-            const maskBottom = Math.floor(maskTop + (maskHeight / 100) * PANEL_HEIGHT);
-
-            // Check if current pixel is within mask area
             if (x >= maskLeft && x < maskRight && y >= maskTop && y < maskBottom) {
                 rr = 0;
                 gg = 0;
@@ -434,7 +548,7 @@ function processFrame(sourceCanvas, sourceCtx) {
             }
         }
 
-        // Store adjusted values
+        // Store adjusted values with clamping
         data[i] = Math.max(0, Math.min(255, rr));
         data[i + 1] = Math.max(0, Math.min(255, gg));
         data[i + 2] = Math.max(0, Math.min(255, bb));
@@ -449,35 +563,61 @@ function processFrame(sourceCanvas, sourceCtx) {
     return rgbData;
 }
 
-// Update the preview function to use the shared processor
-function updatePreview() {
-    if (video.readyState < 2 || isStreaming) {
-        requestAnimationFrame(updatePreview);
-        return;
+// Optimize adjustPixel function
+function adjustPixel(value, contrast, brightness, channel) {
+    // Apply contrast
+    let newValue = ((value / 255 - 0.5) * contrast + 0.5) * 255;
+
+    // Apply brightness
+    newValue += brightness;
+
+    // Apply Gaussian curve adjustment only if enabled
+    if (gaussianEnabled) {
+        const gaussianValue = newValue / 255;
+        const gaussianAdjustment = Math.exp(
+            -Math.pow(gaussianValue - gaussianMid, 2) / (2 * Math.pow(gaussianSpread, 2))
+        );
+        newValue = newValue * (1 + gaussianStrength * gaussianAdjustment);
     }
 
-    const crop = calculateCrop(video.videoWidth, video.videoHeight);
+    // Apply tone adjustments
+    const normalizedValue = newValue / 255;
 
-    // Clear the canvas before drawing to prevent trails
-    previewCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-
-    // Draw at panel resolution with crop
-    previewCtx.drawImage(video,
-        crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-        0, 0, PANEL_WIDTH, PANEL_HEIGHT
-    );
-
-    // Process the frame
-    processFrame(previewCanvas, previewCtx);
-
-    // Handle ping pong for preview mode (when not streaming)
-    if (pingPongMode && shouldLoop && !isStreaming && isPlayingBackward) {
-        // Continue backward playback in preview mode
-        playBackward();
+    // Shadows affect dark areas (0-0.33)
+    if (normalizedValue <= 0.33) {
+        newValue += shadows * (1 - normalizedValue * 3);
     }
 
-    requestAnimationFrame(updatePreview);
+    // Midtones affect middle areas (0.33-0.66)
+    if (normalizedValue > 0.33 && normalizedValue <= 0.66) {
+        const midtoneFactor = (normalizedValue - 0.33) * 3;
+        newValue += midtones * (1 - Math.abs(midtoneFactor - 0.5) * 2);
+    }
+
+    // Highlights affect bright areas (0.66-1.0)
+    if (normalizedValue > 0.66) {
+        newValue += highlights * ((normalizedValue - 0.66) * 3);
+    }
+
+    // Apply channel multiplier
+    newValue *= channel;
+
+    return newValue;
 }
+
+// Event Listeners
+document.getElementById('connectButton').onclick = toggleConnection;
+
+document.getElementById('fileInput').onchange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        originalFileName = file.name;  // Store the original filename
+        video.src = URL.createObjectURL(file);
+        document.getElementById('streamButton').disabled = !isConnected;  // Only enable if connected
+        document.getElementById('downloadBinButton').disabled = false;
+        isPlayingBackward = false;  // Reset ping pong state
+    }
+};
 
 // Update the convertToBin function to use the same processor
 async function convertToBin() {
@@ -503,12 +643,11 @@ async function convertToBin() {
     const sourceFrames = endFrame - startFrame;
 
     // Adjust total frames based on playback speed
-    // For slow speed (< 1.0), we output more frames; for fast speed (> 1.0), we output fewer frames
     const adjustedFrames = Math.floor(sourceFrames / playbackSpeed);
     const totalFrames = pingPongMode ? adjustedFrames * 2 : adjustedFrames;
     let currentFrame = 0;
 
-    // Create a buffer to hold trimmed frames (double size for ping pong)
+    // Create a buffer to hold trimmed frames
     const binData = new Uint8Array(totalFrames * FRAME_SIZE);
     let binOffset = 0;
 
@@ -521,38 +660,25 @@ async function convertToBin() {
 
     try {
         // Process frames based on playback speed
-        // For speed > 1.0, we skip frames; for speed < 1.0, we duplicate frames
         for (let outputFrame = 0; outputFrame < adjustedFrames; outputFrame++) {
-            // Calculate which source frame to use based on playback speed
             const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
-
-            // Set video to exact frame time
             video.currentTime = sourceFrameIndex / TARGET_FPS;
 
-            // Wait for the video to seek
             await new Promise(resolve => {
                 video.onseeked = resolve;
             });
 
             const crop = calculateCrop(video.videoWidth, video.videoHeight);
-
-            // Clear the canvas before drawing to prevent trails
             ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-
-            // Draw with crop
             ctx.drawImage(video,
                 crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
                 0, 0, PANEL_WIDTH, PANEL_HEIGHT
             );
 
-            // Process the frame using the same function as preview
             const rgbData = processFrame(canvas, ctx);
-
-            // Add to binary buffer
             binData.set(rgbData, binOffset);
             binOffset += rgbData.length;
 
-            // Update progress
             currentFrame++;
             const progress = Math.floor((currentFrame / totalFrames) * 100);
             progressFill.style.width = `${progress}%`;
@@ -563,38 +689,25 @@ async function convertToBin() {
         if (pingPongMode) {
             document.getElementById('status').textContent = `Converting video to binary${speedInfo} (backward pass)...`;
 
-            // Process frames backward (excluding the last frame to avoid duplication)
             for (let outputFrame = adjustedFrames - 2; outputFrame >= 0; outputFrame--) {
-                // Calculate which source frame to use based on playback speed
                 const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
-
-                // Set video to exact frame time
                 video.currentTime = sourceFrameIndex / TARGET_FPS;
 
-                // Wait for the video to seek
                 await new Promise(resolve => {
                     video.onseeked = resolve;
                 });
 
                 const crop = calculateCrop(video.videoWidth, video.videoHeight);
-
-                // Clear the canvas before drawing to prevent trails
                 ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-
-                // Draw with crop
                 ctx.drawImage(video,
                     crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
                     0, 0, PANEL_WIDTH, PANEL_HEIGHT
                 );
 
-                // Process the frame using the same function as preview
                 const rgbData = processFrame(canvas, ctx);
-
-                // Add to binary buffer
                 binData.set(rgbData, binOffset);
                 binOffset += rgbData.length;
 
-                // Update progress
                 currentFrame++;
                 const progress = Math.floor((currentFrame / totalFrames) * 100);
                 progressFill.style.width = `${progress}%`;
@@ -627,7 +740,7 @@ async function convertToBin() {
     } finally {
         // Restore video state
         video.currentTime = originalTime;
-        video.playbackRate = playbackSpeed; // Restore playback speed
+        video.playbackRate = playbackSpeed;
         if (wasPlaying && isStreaming) {
             video.play();
         }
@@ -635,20 +748,6 @@ async function convertToBin() {
         progressBar.style.display = 'none';
     }
 }
-
-// Event Listeners
-document.getElementById('connectButton').onclick = toggleConnection;
-
-document.getElementById('fileInput').onchange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-        originalFileName = file.name;  // Store the original filename
-        video.src = URL.createObjectURL(file);
-        document.getElementById('streamButton').disabled = !isConnected;  // Only enable if connected
-        document.getElementById('downloadBinButton').disabled = false;
-        isPlayingBackward = false;  // Reset ping pong state
-    }
-};
 
 // Add the streamVideo function
 async function streamVideo() {
@@ -832,30 +931,6 @@ video.addEventListener('ended', () => {
 // Ensure playback rate is applied when video is loaded
 video.addEventListener('loadeddata', () => {
     video.playbackRate = playbackSpeed;
-});
-
-// Modify the updateControls function with the new processFrame function
-function updateControls() {
-    if (!isStreaming && !video.paused) {
-        requestAnimationFrame(updatePreview);
-    } else if (!isStreaming) {
-        // If video is paused, update once
-        updatePreview();
-    }
-}
-
-// Add these video event listeners after the other event listeners
-video.addEventListener('play', () => {
-    if (!isStreaming) {
-        requestAnimationFrame(updatePreview);
-    }
-});
-
-video.addEventListener('pause', () => {
-    // Update one last time when paused
-    if (!isStreaming) {
-        updatePreview();
-    }
 });
 
 // Add event listeners for the RGB controls
@@ -1453,46 +1528,4 @@ function calculateCrop(videoWidth, videoHeight) {
         sourceWidth,
         sourceHeight
     };
-}
-
-// Also add back the adjustPixel function that was lost
-function adjustPixel(value, contrast, brightness, channel) {
-    // Apply contrast
-    let newValue = ((value / 255 - 0.5) * contrast + 0.5) * 255;
-
-    // Apply brightness
-    newValue += brightness;
-
-    // Apply Gaussian curve adjustment only if enabled
-    if (gaussianEnabled) {
-        const gaussianValue = newValue / 255;
-        const gaussianAdjustment = Math.exp(
-            -Math.pow(gaussianValue - gaussianMid, 2) / (2 * Math.pow(gaussianSpread, 2))
-        );
-        newValue = newValue * (1 + gaussianStrength * gaussianAdjustment);
-    }
-
-    // Apply tone adjustments
-    const normalizedValue = newValue / 255;
-
-    // Shadows affect dark areas (0-0.33)
-    if (normalizedValue <= 0.33) {
-        newValue += shadows * (1 - normalizedValue * 3);
-    }
-
-    // Midtones affect middle areas (0.33-0.66)
-    if (normalizedValue > 0.33 && normalizedValue <= 0.66) {
-        const midtoneFactor = (normalizedValue - 0.33) * 3;
-        newValue += midtones * (1 - Math.abs(midtoneFactor - 0.5) * 2);
-    }
-
-    // Highlights affect bright areas (0.66-1.0)
-    if (normalizedValue > 0.66) {
-        newValue += highlights * ((normalizedValue - 0.66) * 3);
-    }
-
-    // Apply channel multiplier
-    newValue *= channel;
-
-    return newValue;
 }
