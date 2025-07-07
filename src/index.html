@@ -184,11 +184,11 @@
                             <div class="playback-control">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="loopVideo" checked>
-                                    Loop video
+                                    Loop
                                 </label>
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="pingPongMode">
-                                    Ping Pong Mode
+                                    Ping Pong
                                 </label>
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="muteVideo">
@@ -203,20 +203,15 @@
                             </div>
                         </div>
                         <div class="effect-group">
-                            <label>Trim Video</label>
-                            <div class="trim-control">
-                                <label>
-                                    Start:
-                                    <input type="number" id="trimStartNum" min="0" step="0.1" value="0">s
-                                </label>
+                            <div class="slider-row">
+                                <label for="trimStart">Start</label>
                                 <input type="range" id="trimStart" min="0" step="0.1" value="0">
+                                <input type="number" id="trimStartNum" min="0" step="0.1" value="0" class="value-input">
                             </div>
-                            <div class="trim-control">
-                                <label>
-                                    End:
-                                    <input type="number" id="trimEndNum" min="0" step="0.1" value="0">s
-                                </label>
+                            <div class="slider-row">
+                                <label for="trimEnd">End</label>
                                 <input type="range" id="trimEnd" min="0" step="0.1" value="0">
+                                <input type="number" id="trimEndNum" min="0" step="0.1" value="0" class="value-input">
                             </div>
                         </div>
 

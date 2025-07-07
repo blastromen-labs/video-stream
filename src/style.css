@@ -314,14 +314,14 @@ button:disabled {
 
 .controls {
     margin: 0px 0;
-    padding: 15px;
+    padding: 12px;
     background-color: #2a2a2a;
     border-radius: 5px;
     border: 1px solid #333;
 }
 
 .control-group {
-    margin: 15px 0;
+    margin: 8px 0;
 }
 
 .control-group label {
@@ -383,13 +383,12 @@ input[type="range"]:hover::-moz-range-thumb {
 .checkbox-label {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 0px;
     color: #e0e0e0;
     font-size: 13px;
     cursor: pointer;
-    margin: 8px 0;
-    line-height: 1;
-    min-height: 20px;
+    line-height: 0.5;
+    min-height: 0px;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -467,12 +466,6 @@ input[type="file"]::-webkit-file-upload-button {
     margin-top: 10px;
 }
 
-/* h1 styling moved to navbar-brand */
-
-/* Progress bar styles moved to navbar-info */
-
-/* Download button styles moved to navbar-controls */
-
 .preview-container {
     display: flex;
     gap: 0px;
@@ -484,8 +477,6 @@ input[type="file"]::-webkit-file-upload-button {
     flex: 0 0 auto;
     max-width: none;
 }
-
-/* Removed h3 styling - replaced with pill labels */
 
 .main-container {
     display: flex;
@@ -502,35 +493,6 @@ input[type="file"]::-webkit-file-upload-button {
     flex: 1;
     min-width: 600px;
 }
-
-.trim-control {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 10px 0;
-}
-
-.trim-control input[type="number"] {
-    width: 70px;
-    padding: 5px;
-    background: #3a3a3a;
-    border: 1px solid #555;
-    border-radius: 4px;
-    color: #e0e0e0;
-    font-family: monospace;
-}
-
-.trim-control input[type="range"] {
-    flex: 1;
-}
-
-.trim-control label {
-    min-width: 120px;
-    margin: 0;
-    font-size: 13px;
-}
-
-/* Button row styles moved to navbar */
 
 .colorize-control {
     display: flex;
@@ -598,7 +560,6 @@ input[type="file"]::-webkit-file-upload-button {
     flex-direction: column;
     gap: 10px;
     margin: 10px 0;
-    padding: 10px;
     background: #333;
     border-radius: 4px;
     display: none;
@@ -629,14 +590,12 @@ input[type="file"]::-webkit-file-upload-button {
     background-color: #2a2a2a;
     border-radius: 5px;
     border: 1px solid #333;
-    padding: 15px;
+    padding: 12px;
 }
 
-/* Effects panel heading removed */
-
 .effect-group {
-    margin: 15px 0;
-    padding: 10px;
+    margin: 8px 0;
+    padding: 8px;
     background: #333;
     border-radius: 4px;
 }
@@ -667,7 +626,6 @@ input[type="file"]::-webkit-file-upload-button {
     flex-direction: column;
     gap: 10px;
     margin: 10px 0;
-    padding: 10px;
     background: #333;
     border-radius: 4px;
 }
@@ -698,7 +656,6 @@ input[type="file"]::-webkit-file-upload-button {
     flex-direction: column;
     gap: 10px;
     margin: 10px 0;
-    padding: 10px;
     background: #333;
     border-radius: 4px;
 }
@@ -727,7 +684,6 @@ input[type="file"]::-webkit-file-upload-button {
     flex-direction: column;
     gap: 10px;
     margin: 10px 0;
-    padding: 10px;
     background: #333;
     border-radius: 4px;
 }
@@ -758,7 +714,7 @@ input[type="file"]::-webkit-file-upload-button {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin: 8px 0;
+    margin: 6px 0;
 }
 
 .slider-row label {
