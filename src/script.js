@@ -786,11 +786,12 @@ async function streamVideo() {
 
     // Initialize timeline tracking for streaming
     let streamStartTime = performance.now();
-    let streamTimelinePosition = 0;
+    let streamTimelinePosition = 0;  // Always start from 0
     let streamPausedAt = null;
     let streamTotalPausedTime = 0;
     let wasPlaying = !video.paused;
     let lastVideoTime = video.currentTime;
+    let videoHasLooped = false;
 
     try {
         while (isStreaming) {
@@ -810,18 +811,20 @@ async function streamVideo() {
                 streamTotalPausedTime += pauseDuration;
                 streamPausedAt = null;
                 wasPlaying = true;
-                document.getElementById('status').className = 'info';
-                document.getElementById('status').textContent = 'Streaming video...';
+                // Don't update status here - let the main loop handle it
             }
 
             // Handle seek detection
             if (Math.abs(video.currentTime - lastVideoTime) > 0.5 && !video.paused) {
-                // User seeked - recalculate timeline position
-                const trimmedVideoDuration = trimEnd - trimStart;
-                const videoPositionInTrim = video.currentTime - trimStart;
-                streamTimelinePosition = videoPositionInTrim % trimmedVideoDuration;
-                streamStartTime = currentTime - (streamTimelinePosition * 1000);
-                streamTotalPausedTime = 0;
+                // User seeked - only adjust if timeline is not longer than video
+                // If timeline is longer, maintain the current timeline position
+                if (Timeline.tracks.length === 0 || Timeline.duration <= (trimEnd - trimStart)) {
+                    const trimmedVideoDuration = trimEnd - trimStart;
+                    const videoPositionInTrim = video.currentTime - trimStart;
+                    streamTimelinePosition = videoPositionInTrim % trimmedVideoDuration;
+                    streamStartTime = currentTime - (streamTimelinePosition * 1000) - streamTotalPausedTime;
+                }
+                // Otherwise, keep the timeline position as is - don't sync with video position
             }
             lastVideoTime = video.currentTime;
 
@@ -837,7 +840,21 @@ async function streamVideo() {
                 // Calculate timeline position for streaming
                 if (Timeline.tracks.length > 0) {
                     const streamElapsed = (currentTime - streamStartTime - streamTotalPausedTime) / 1000;
-                    streamTimelinePosition = streamElapsed % Timeline.duration;
+                    streamTimelinePosition = streamElapsed;
+
+                    // Only loop timeline if we've exceeded duration and looping is enabled
+                    if (streamTimelinePosition >= Timeline.duration) {
+                        if (shouldLoop) {
+                            // console.log(`Timeline loop: Resetting from ${streamTimelinePosition.toFixed(2)}s to 0`);
+                            streamTimelinePosition = 0;
+                            streamStartTime = currentTime - streamTotalPausedTime;
+                            video.currentTime = trimStart;  // Also reset video when timeline loops
+                        } else {
+                            // Stop at timeline end
+                            streamTimelinePosition = Timeline.duration;
+                        }
+                    }
+
                     applyAutomationAtTime(streamTimelinePosition);
 
                     // Update visual playhead during streaming
@@ -845,6 +862,14 @@ async function streamVideo() {
                     if (playhead) {
                         playhead.style.left = `${streamTimelinePosition * Timeline.pixelsPerSecond}px`;
                     }
+
+                    // Update status to show timeline position
+                    const trimmedVideoDuration = trimEnd - trimStart;
+                    const videoLoop = Math.floor(streamTimelinePosition / trimmedVideoDuration) + 1;
+                    const statusText = Timeline.duration > trimmedVideoDuration
+                        ? `Streaming... Timeline: ${streamTimelinePosition.toFixed(1)}/${Timeline.duration}s (Video loop ${videoLoop})`
+                        : `Streaming... Timeline: ${streamTimelinePosition.toFixed(1)}s`;
+                    document.getElementById('status').textContent = statusText;
                 }
 
                 // Process frame using our shared function
@@ -888,19 +913,28 @@ async function streamVideo() {
                 if (pingPongMode && shouldLoop) {
                     // In ping pong mode, the timeupdate event handler will manage the playback
                     // Just ensure we don't exit the streaming loop
-                } else if (video.ended || video.currentTime >= trimEnd) {
-                    if (shouldLoop) {
+                } else if (video.currentTime >= trimEnd - 0.05) {  // Check near end, not video.ended
+                    if (shouldLoop || (Timeline.tracks.length > 0 && streamTimelinePosition < Timeline.duration)) {
+                        // Log for debugging
+                        // if (Timeline.tracks.length > 0) {
+                        //     console.log(`Video loop: Timeline at ${streamTimelinePosition.toFixed(2)}s/${Timeline.duration}s, Video at ${video.currentTime.toFixed(2)}s`);
+                        // }
+
                         video.currentTime = trimStart;
-                        video.play();
-                        // Reset timeline position if we've completed the timeline duration
-                        if (Timeline.tracks.length > 0 && streamTimelinePosition >= Timeline.duration - 0.1) {
-                            streamStartTime = currentTime;
-                            streamTimelinePosition = 0;
-                            streamTotalPausedTime = 0;
+
+                        // Only stop streaming if timeline is complete and loop is disabled
+                        if (Timeline.tracks.length > 0) {
+                            if (streamTimelinePosition >= Timeline.duration && !shouldLoop) {
+                                // console.log('Timeline completed, stopping stream');
+                                isStreaming = false;
+                                break;
+                            }
+                            // Otherwise continue - timeline hasn't finished
+                        } else if (!shouldLoop) {
+                            // No timeline, just video looping
+                            isStreaming = false;
+                            break;
                         }
-                    } else {
-                        isStreaming = false;
-                        break;
                     }
                 }
             }
