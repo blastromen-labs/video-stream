@@ -787,16 +787,56 @@ async function streamVideo() {
     // Initialize timeline tracking for streaming
     let streamStartTime = performance.now();
     let streamTimelinePosition = 0;
+    let streamPausedAt = null;
+    let streamTotalPausedTime = 0;
+    let wasPlaying = !video.paused;
+    let lastVideoTime = video.currentTime;
 
     try {
         while (isStreaming) {
             const currentTime = performance.now();
             const elapsed = currentTime - lastFrameTime;
 
-            if (elapsed >= FRAME_TIME) {
+            // Handle pause state
+            if (video.paused && !streamPausedAt) {
+                // Just paused
+                streamPausedAt = currentTime;
+                wasPlaying = false;
+                document.getElementById('status').className = 'info';
+                document.getElementById('status').textContent = 'Streaming paused...';
+            } else if (!video.paused && streamPausedAt) {
+                // Just resumed
+                const pauseDuration = currentTime - streamPausedAt;
+                streamTotalPausedTime += pauseDuration;
+                streamPausedAt = null;
+                wasPlaying = true;
+                document.getElementById('status').className = 'info';
+                document.getElementById('status').textContent = 'Streaming video...';
+            }
+
+            // Handle seek detection
+            if (Math.abs(video.currentTime - lastVideoTime) > 0.5 && !video.paused) {
+                // User seeked - recalculate timeline position
+                const trimmedVideoDuration = trimEnd - trimStart;
+                const videoPositionInTrim = video.currentTime - trimStart;
+                streamTimelinePosition = videoPositionInTrim % trimmedVideoDuration;
+                streamStartTime = currentTime - (streamTimelinePosition * 1000);
+                streamTotalPausedTime = 0;
+            }
+            lastVideoTime = video.currentTime;
+
+            // Update visual playhead position even when paused
+            if (Timeline.tracks.length > 0) {
+                const playhead = document.getElementById('timelinePlayhead');
+                if (playhead) {
+                    playhead.style.left = `${streamTimelinePosition * Timeline.pixelsPerSecond}px`;
+                }
+            }
+
+            if (elapsed >= FRAME_TIME && !video.paused) {
                 // Calculate timeline position for streaming
                 if (Timeline.tracks.length > 0) {
-                    const streamElapsed = (currentTime - streamStartTime) / 1000;
+                    const streamElapsed = (currentTime - streamStartTime - streamTotalPausedTime) / 1000;
                     streamTimelinePosition = streamElapsed % Timeline.duration;
                     applyAutomationAtTime(streamTimelinePosition);
 
@@ -856,6 +896,7 @@ async function streamVideo() {
                         if (Timeline.tracks.length > 0 && streamTimelinePosition >= Timeline.duration - 0.1) {
                             streamStartTime = currentTime;
                             streamTimelinePosition = 0;
+                            streamTotalPausedTime = 0;
                         }
                     } else {
                         isStreaming = false;
@@ -873,6 +914,15 @@ async function streamVideo() {
         document.getElementById('status').textContent = 'Streaming error: ' + error.message;
     } finally {
         writer.releaseLock();
+
+        // Sync timeline position back to main Timeline object
+        if (Timeline.tracks.length > 0) {
+            Timeline.playheadPosition = streamTimelinePosition;
+            Timeline.startTime = null;
+            Timeline.pausedAt = null;
+            Timeline.totalPausedTime = 0;
+        }
+
         if (!shouldLoop || !isStreaming) {
             video.pause();
             document.getElementById('streamButton').textContent = 'Start Streaming';
@@ -899,6 +949,9 @@ document.getElementById('streamButton').onclick = () => {
         if (Timeline.tracks.length > 0) {
             Timeline.playheadPosition = 0;
             Timeline.loopCount = 0;
+            Timeline.startTime = null;
+            Timeline.pausedAt = null;
+            Timeline.totalPausedTime = 0;
             // Stop the preview automation loop since streaming will handle it
             stopAutomationLoop();
         }
@@ -919,9 +972,13 @@ document.getElementById('streamButton').onclick = () => {
         document.getElementById('status').className = 'info';
         document.getElementById('status').textContent = 'Stream stopped';
 
-        // Restart automation loop if we have timeline tracks
-        if (Timeline.tracks.length > 0 && !video.paused) {
-            startAutomationLoop();
+        // Sync timeline position back from streaming state
+        if (Timeline.tracks.length > 0) {
+            // The streamVideo function will have set the correct timeline position
+            // We just need to prepare for preview mode to take over
+            Timeline.startTime = null;
+            Timeline.pausedAt = null;
+            Timeline.totalPausedTime = 0;
         }
     }
 };
@@ -1670,7 +1727,9 @@ const Timeline = {
     selectedTrack: null,
     animationFrameId: null,
     startTime: null,      // For tracking timeline playback time
-    loopCount: 0         // Track how many times video has looped
+    loopCount: 0,         // Track how many times video has looped
+    pausedAt: null,       // Track when timeline was paused
+    totalPausedTime: 0    // Track total time spent paused
 };
 
 // Available parameters for automation
@@ -1806,6 +1865,8 @@ function initializeTimeline() {
         } else {
             // Stop automation loop when timeline is hidden
             stopAutomationLoop();
+            // Clear pause tracking since we're hiding the timeline
+            Timeline.pausedAt = null;
         }
     });
 
@@ -1816,6 +1877,11 @@ function initializeTimeline() {
     document.getElementById('clearTimelineButton').addEventListener('click', () => {
         if (confirm('Clear all timeline tracks?')) {
             Timeline.tracks = [];
+            Timeline.playheadPosition = 0;
+            Timeline.startTime = null;
+            Timeline.pausedAt = null;
+            Timeline.totalPausedTime = 0;
+            Timeline.loopCount = 0;
             renderTimeline();
             stopAutomationLoop();
         }
@@ -1877,6 +1943,9 @@ function initializeTimeline() {
             if (video.currentTime <= trimStart + 0.1 && Timeline.playheadPosition >= Timeline.duration - 0.1) {
                 Timeline.playheadPosition = 0;
                 Timeline.loopCount = 0;
+                Timeline.startTime = null;
+                Timeline.pausedAt = null;
+                Timeline.totalPausedTime = 0;
             }
             startAutomationLoop();
         }
@@ -1884,11 +1953,7 @@ function initializeTimeline() {
 
     video.addEventListener('pause', () => {
         stopAutomationLoop();
-        // Update timeline position when paused
-        if (Timeline.startTime) {
-            const elapsed = (performance.now() - Timeline.startTime) / 1000;
-            Timeline.playheadPosition = Math.min(elapsed, Timeline.duration);
-        }
+        // Timeline position is already set by the animation loop, no need to update
     });
 
     video.addEventListener('seeked', () => {
@@ -1898,6 +1963,14 @@ function initializeTimeline() {
             const trimmedVideoDuration = trimEnd - trimStart;
             const videoPositionInTrim = video.currentTime - trimStart;
             Timeline.playheadPosition = videoPositionInTrim + (Timeline.loopCount * trimmedVideoDuration);
+
+            // Reset timeline timing to current position
+            if (Timeline.startTime) {
+                Timeline.startTime = performance.now() - (Timeline.playheadPosition * 1000);
+                Timeline.totalPausedTime = 0;
+                Timeline.pausedAt = null;
+            }
+
             updatePlayhead();
         }
     });
@@ -2322,7 +2395,12 @@ function updateTimelineRuler() {
 // Playhead management
 function updatePlayhead() {
     const playhead = document.getElementById('timelinePlayhead');
-    Timeline.playheadPosition = video.currentTime;
+
+    // Only update timeline position if not controlled by animation loop
+    if (!Timeline.animationFrameId) {
+        Timeline.playheadPosition = video.currentTime;
+    }
+
     playhead.style.left = `${Timeline.playheadPosition * Timeline.pixelsPerSecond}px`;
 
     // Apply automation values if not already being updated by the animation loop
@@ -2501,6 +2579,8 @@ function handleTimelineClick(e) {
     // Update start time for animation loop
     if (Timeline.startTime) {
         Timeline.startTime = performance.now() - (time * 1000);
+        Timeline.totalPausedTime = 0;
+        Timeline.pausedAt = null;
     }
 
     // Update visual playhead
@@ -2515,6 +2595,11 @@ function removeTrack(trackId) {
     // Stop automation loop if no tracks remain
     if (Timeline.tracks.length === 0) {
         stopAutomationLoop();
+        Timeline.playheadPosition = 0;
+        Timeline.startTime = null;
+        Timeline.pausedAt = null;
+        Timeline.totalPausedTime = 0;
+        Timeline.loopCount = 0;
     }
 }
 
@@ -2783,9 +2868,21 @@ function startAutomationLoop() {
         cancelAnimationFrame(Timeline.animationFrameId);
     }
 
-    // Initialize start time
+    // Initialize or resume timeline
+    const currentTime = performance.now();
     const trimmedVideoDuration = trimEnd - trimStart;
-    Timeline.startTime = performance.now() - (Timeline.playheadPosition * 1000);
+
+    if (Timeline.pausedAt) {
+        // Resuming from pause - adjust start time by pause duration
+        const pauseDuration = currentTime - Timeline.pausedAt;
+        Timeline.totalPausedTime += pauseDuration;
+        Timeline.pausedAt = null;
+    } else if (!Timeline.startTime) {
+        // First time starting - initialize
+        Timeline.startTime = currentTime;
+        Timeline.totalPausedTime = 0;
+    }
+
     Timeline.loopCount = Math.floor(Timeline.playheadPosition / trimmedVideoDuration);
 
     function updateAutomation() {
@@ -2794,9 +2891,9 @@ function startAutomationLoop() {
             return;
         }
 
-        // Calculate timeline position based on elapsed time
+        // Calculate timeline position based on elapsed time minus paused time
         const currentTime = performance.now();
-        const elapsed = (currentTime - Timeline.startTime) / 1000;
+        const elapsed = (currentTime - Timeline.startTime - Timeline.totalPausedTime) / 1000;
         Timeline.playheadPosition = elapsed;
 
         // Check if we've reached the end of the timeline
@@ -2805,6 +2902,7 @@ function startAutomationLoop() {
                 // Reset timeline to beginning
                 Timeline.playheadPosition = 0;
                 Timeline.startTime = currentTime;
+                Timeline.totalPausedTime = 0;
                 Timeline.loopCount = 0;
                 video.currentTime = trimStart;
             } else {
@@ -2850,6 +2948,15 @@ function stopAutomationLoop() {
     if (Timeline.animationFrameId) {
         cancelAnimationFrame(Timeline.animationFrameId);
         Timeline.animationFrameId = null;
+
+        // Record when we paused
+        Timeline.pausedAt = performance.now();
+
+        // Update visual playhead to show exact pause position
+        const playhead = document.getElementById('timelinePlayhead');
+        if (playhead) {
+            playhead.style.left = `${Timeline.playheadPosition * Timeline.pixelsPerSecond}px`;
+        }
     }
 }
 
