@@ -1979,6 +1979,20 @@ function initializeTimeline() {
     document.getElementById('saveKeyframeEdit').addEventListener('click', saveKeyframeEdit);
     document.getElementById('modalOverlay').addEventListener('click', closeKeyframeEditor);
 
+    // Add Enter key support for keyframe editor inputs
+    const keyframeInputs = ['keyframeTime', 'keyframeValue', 'keyframeEasing'];
+    keyframeInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveKeyframeEdit();
+                }
+            });
+        }
+    });
+
     // Update timeline when video loads
     video.addEventListener('loadedmetadata', () => {
         Timeline.videoDuration = video.duration;
