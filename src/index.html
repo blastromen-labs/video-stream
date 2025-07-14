@@ -329,6 +329,14 @@
                 <button id="saveTimelineButton" class="timeline-button">Save Timeline</button>
                 <button id="loadTimelineButton" class="timeline-button">Load Timeline</button>
                 <input type="file" id="timelineFileInput" accept=".json" style="display: none;">
+                <div class="timeline-length-control" style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-size: 12px; color: #ccc;">Length:</label>
+                    <input type="number" id="timelineLength" step="0.1" min="0.1"
+                        style="width: 60px; padding: 4px; background: #2a2a2a; border: 1px solid #444; color: #fff; border-radius: 4px; font-size: 12px;">
+                    <span style="font-size: 12px; color: #ccc;">s</span>
+                    <button id="resetTimelineLength" class="timeline-button"
+                        style="padding: 4px 8px; font-size: 11px;">Reset to Video</button>
+                </div>
                 <div class="timeline-zoom-controls">
                     <label>Zoom:</label>
                     <input type="range" id="timelineZoom" class="timeline-zoom-slider" min="0.5" max="5" step="0.1"
@@ -401,6 +409,8 @@
                 <li><strong>Add Keyframes:</strong> Double-click on a track to add a keyframe at that time</li>
                 <li><strong>Edit Keyframes:</strong> Right-click on a keyframe to edit its value and easing</li>
                 <li><strong>Drag Keyframes:</strong> Click and drag keyframes to change their timing</li>
+                <li><strong>Timeline Length:</strong> Set a custom timeline duration to create animations longer than
+                    your video - the video will loop!</li>
                 <li><strong>Zoom Timeline:</strong> Use the zoom slider to see more or less detail</li>
                 <li><strong>Preview:</strong> Play the video to see your automation in action</li>
                 <li><strong>Export:</strong> Click "Download .bin" to export with timeline automation applied</li>
@@ -411,7 +421,9 @@
                 <li>Multiple parameters can be automated simultaneously</li>
                 <li>Easing options (Linear, Ease In/Out) create smooth transitions</li>
                 <li>Click on the timeline ruler to jump to specific times</li>
-                <li>The red playhead shows current video position</li>
+                <li>The red playhead shows current timeline position</li>
+                <li>Extend timeline duration to create evolving loops - perfect for generative animations!</li>
+                <li>Timeline length is saved/loaded with your preset files</li>
                 <li>Exported files will have "_timeline" suffix when automation is used</li>
             </ul>
         </div>

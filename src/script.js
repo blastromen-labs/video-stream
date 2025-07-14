@@ -784,15 +784,27 @@ async function streamVideo() {
     frameCount = 0;
     lastFpsTime = performance.now();
 
+    // Initialize timeline tracking for streaming
+    let streamStartTime = performance.now();
+    let streamTimelinePosition = 0;
+
     try {
         while (isStreaming) {
             const currentTime = performance.now();
             const elapsed = currentTime - lastFrameTime;
 
             if (elapsed >= FRAME_TIME) {
-                // Apply timeline automation if available
+                // Calculate timeline position for streaming
                 if (Timeline.tracks.length > 0) {
-                    applyAutomationAtTime(video.currentTime);
+                    const streamElapsed = (currentTime - streamStartTime) / 1000;
+                    streamTimelinePosition = streamElapsed % Timeline.duration;
+                    applyAutomationAtTime(streamTimelinePosition);
+
+                    // Update visual playhead during streaming
+                    const playhead = document.getElementById('timelinePlayhead');
+                    if (playhead) {
+                        playhead.style.left = `${streamTimelinePosition * Timeline.pixelsPerSecond}px`;
+                    }
                 }
 
                 // Process frame using our shared function
@@ -840,6 +852,11 @@ async function streamVideo() {
                     if (shouldLoop) {
                         video.currentTime = trimStart;
                         video.play();
+                        // Reset timeline position if we've completed the timeline duration
+                        if (Timeline.tracks.length > 0 && streamTimelinePosition >= Timeline.duration - 0.1) {
+                            streamStartTime = currentTime;
+                            streamTimelinePosition = 0;
+                        }
                     } else {
                         isStreaming = false;
                         break;
@@ -877,6 +894,15 @@ document.getElementById('streamButton').onclick = () => {
         isPlayingBackward = false; // Reset ping pong state
         video.currentTime = trimStart;
         video.playbackRate = playbackSpeed; // Ensure playback speed is set
+
+        // Reset timeline position for streaming if we have timeline tracks
+        if (Timeline.tracks.length > 0) {
+            Timeline.playheadPosition = 0;
+            Timeline.loopCount = 0;
+            // Stop the preview automation loop since streaming will handle it
+            stopAutomationLoop();
+        }
+
         video.play();
 
         document.getElementById('streamButton').textContent = 'Stop Streaming';
@@ -892,6 +918,11 @@ document.getElementById('streamButton').onclick = () => {
         document.getElementById('streamButton').classList.remove('streaming');
         document.getElementById('status').className = 'info';
         document.getElementById('status').textContent = 'Stream stopped';
+
+        // Restart automation loop if we have timeline tracks
+        if (Timeline.tracks.length > 0 && !video.paused) {
+            startAutomationLoop();
+        }
     }
 };
 
@@ -950,6 +981,11 @@ if (!navigator.serial) {
 
 // Add video ended event handler
 video.addEventListener('ended', () => {
+    // Skip if timeline is controlling playback or if we're streaming
+    if ((Timeline.tracks.length > 0 && Timeline.animationFrameId) || isStreaming) {
+        return;
+    }
+
     if (pingPongMode && shouldLoop) {
         // In ping pong mode, start backward playback when video ends
         isPlayingBackward = true;
@@ -1064,6 +1100,11 @@ document.getElementById('trimEndNum').onchange = (event) => {
 
 // Modify the video ended event handler
 video.addEventListener('timeupdate', () => {
+    // Skip if timeline is controlling playback
+    if (Timeline.tracks.length > 0 && Timeline.animationFrameId) {
+        return;
+    }
+
     if (pingPongMode && shouldLoop) {
         // Ping pong mode logic
         if (!isPlayingBackward && video.currentTime >= trimEnd) {
@@ -1619,14 +1660,17 @@ function addSliderInputSync(sliderId, inputId, updateFunction, formatter = (v) =
 // Timeline System
 const Timeline = {
     tracks: [],
-    duration: 0,
+    duration: 0,          // Timeline duration (can be longer than video)
+    videoDuration: 0,     // Actual video duration
     zoom: 1,
     playheadPosition: 0,
     isPlaying: false,
     pixelsPerSecond: 100,
     selectedKeyframe: null,
     selectedTrack: null,
-    animationFrameId: null
+    animationFrameId: null,
+    startTime: null,      // For tracking timeline playback time
+    loopCount: 0         // Track how many times video has looped
 };
 
 // Available parameters for automation
@@ -1749,7 +1793,9 @@ function initializeTimeline() {
         toggleButton.classList.toggle('timeline-open', isOpen);
 
         if (isOpen && video.duration) {
-            Timeline.duration = video.duration;
+            Timeline.videoDuration = video.duration;
+            Timeline.duration = Timeline.duration || video.duration;
+            updateTimelineLengthInput();
             updateTimelineRuler();
             renderTimeline();
 
@@ -1798,24 +1844,60 @@ function initializeTimeline() {
 
     // Update timeline when video loads
     video.addEventListener('loadedmetadata', () => {
-        Timeline.duration = video.duration;
+        Timeline.videoDuration = video.duration;
+        Timeline.duration = Timeline.duration || video.duration; // Keep existing timeline duration if set
         updateTimelineRuler();
+        updateTimelineLengthInput();
+    });
+
+    // Timeline length controls
+    const timelineLengthInput = document.getElementById('timelineLength');
+    const resetLengthButton = document.getElementById('resetTimelineLength');
+
+    timelineLengthInput.addEventListener('change', (e) => {
+        const newDuration = parseFloat(e.target.value);
+        if (newDuration > 0) {
+            Timeline.duration = newDuration;
+            updateTimelineRuler();
+            renderTimeline();
+        }
+    });
+
+    resetLengthButton.addEventListener('click', () => {
+        Timeline.duration = Timeline.videoDuration;
+        updateTimelineLengthInput();
+        updateTimelineRuler();
+        renderTimeline();
     });
 
     // Smooth automation updates during playback
     video.addEventListener('play', () => {
         if (Timeline.tracks.length > 0) {
+            // Reset timeline position if we're starting from the beginning
+            if (video.currentTime <= trimStart + 0.1 && Timeline.playheadPosition >= Timeline.duration - 0.1) {
+                Timeline.playheadPosition = 0;
+                Timeline.loopCount = 0;
+            }
             startAutomationLoop();
         }
     });
 
     video.addEventListener('pause', () => {
         stopAutomationLoop();
+        // Update timeline position when paused
+        if (Timeline.startTime) {
+            const elapsed = (performance.now() - Timeline.startTime) / 1000;
+            Timeline.playheadPosition = Math.min(elapsed, Timeline.duration);
+        }
     });
 
     video.addEventListener('seeked', () => {
-        // Update automation values when seeking
-        if (Timeline.tracks.length > 0) {
+        // When user manually seeks video, update timeline position
+        if (Timeline.tracks.length > 0 && !Timeline.animationFrameId) {
+            // Calculate timeline position based on video position
+            const trimmedVideoDuration = trimEnd - trimStart;
+            const videoPositionInTrim = video.currentTime - trimStart;
+            Timeline.playheadPosition = videoPositionInTrim + (Timeline.loopCount * trimmedVideoDuration);
             updatePlayhead();
         }
     });
@@ -1954,6 +2036,18 @@ function renderTimeline() {
         headersContainer.appendChild(header);
         tracksContainer.appendChild(content);
     });
+
+    // Re-add loop markers after clearing tracks
+    const trimmedVideoDuration = trimEnd - trimStart;
+    if (trimmedVideoDuration > 0 && Timeline.duration > trimmedVideoDuration) {
+        for (let loop = 1; loop * trimmedVideoDuration < Timeline.duration; loop++) {
+            const loopMarker = document.createElement('div');
+            loopMarker.className = 'timeline-loop-marker';
+            loopMarker.style.left = `${loop * trimmedVideoDuration * Timeline.pixelsPerSecond}px`;
+            loopMarker.setAttribute('data-loop', `Loop ${loop + 1}`);
+            tracksContainer.appendChild(loopMarker);
+        }
+    }
 }
 
 // Create track header and content elements separately
@@ -2208,6 +2302,21 @@ function updateTimelineRuler() {
         marker.textContent = `${t}s`;
         ruler.appendChild(marker);
     }
+
+    // Add video loop markers if timeline is longer than video
+    const trimmedVideoDuration = trimEnd - trimStart;
+    if (trimmedVideoDuration > 0 && Timeline.duration > trimmedVideoDuration) {
+        for (let loop = 1; loop * trimmedVideoDuration < Timeline.duration; loop++) {
+            const loopMarker = document.createElement('div');
+            loopMarker.className = 'timeline-loop-marker';
+            loopMarker.style.left = `${loop * trimmedVideoDuration * Timeline.pixelsPerSecond}px`;
+            loopMarker.setAttribute('data-loop', `Loop ${loop + 1}`);
+
+            // Add to both ruler and tracks for full height
+            ruler.appendChild(loopMarker.cloneNode(true));
+            tracks.appendChild(loopMarker);
+        }
+    }
 }
 
 // Playhead management
@@ -2377,7 +2486,25 @@ function handleTimelineClick(e) {
     const x = e.clientX - rect.left;
     const time = Math.max(0, Math.min(x / Timeline.pixelsPerSecond, Timeline.duration));
 
-    video.currentTime = time;
+    // Update timeline position
+    Timeline.playheadPosition = time;
+
+    // Calculate which video loop we're in and the position within that loop
+    const trimmedVideoDuration = trimEnd - trimStart;
+    Timeline.loopCount = Math.floor(time / trimmedVideoDuration);
+    const videoPosition = time % trimmedVideoDuration;
+
+    // Set video to appropriate position
+    const targetVideoTime = trimStart + videoPosition;
+    video.currentTime = Math.min(targetVideoTime, trimEnd);
+
+    // Update start time for animation loop
+    if (Timeline.startTime) {
+        Timeline.startTime = performance.now() - (time * 1000);
+    }
+
+    // Update visual playhead
+    updatePlayhead();
 }
 
 // Remove track
@@ -2412,17 +2539,15 @@ async function convertToBinWithTimeline() {
     const timelineInfo = hasTimeline ? ' with timeline automation' : '';
     document.getElementById('status').textContent = `Converting video to binary${speedInfo}${timelineInfo}...`;
 
-    // Calculate frames from trim points
-    const startFrame = Math.floor(trimStart * TARGET_FPS);
-    const endFrame = Math.floor(trimEnd * TARGET_FPS);
-    const sourceFrames = endFrame - startFrame;
+    // Calculate total frames based on timeline duration or video duration
+    const exportDuration = hasTimeline ? Timeline.duration : (trimEnd - trimStart);
+    const totalExportFrames = Math.floor(exportDuration * TARGET_FPS / playbackSpeed);
 
-    // Adjust total frames based on playback speed
-    const adjustedFrames = Math.floor(sourceFrames / playbackSpeed);
-    const totalFrames = pingPongMode ? adjustedFrames * 2 : adjustedFrames;
+    // For ping pong mode, we still handle it at the video level, not timeline level
+    const totalFrames = pingPongMode && !hasTimeline ? totalExportFrames * 2 : totalExportFrames;
     let currentFrame = 0;
 
-    // Create a buffer to hold trimmed frames
+    // Create a buffer to hold all frames
     const binData = new Uint8Array(totalFrames * FRAME_SIZE);
     let binOffset = 0;
 
@@ -2434,16 +2559,28 @@ async function convertToBinWithTimeline() {
     }
 
     try {
-        // Process frames based on playback speed
-        for (let outputFrame = 0; outputFrame < adjustedFrames; outputFrame++) {
-            const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
-            const frameTime = sourceFrameIndex / TARGET_FPS;
-            video.currentTime = frameTime;
+        // Process frames for the entire timeline duration
+        for (let outputFrame = 0; outputFrame < totalExportFrames; outputFrame++) {
+            // Calculate timeline time for this frame
+            const timelineTime = (outputFrame * playbackSpeed) / TARGET_FPS;
 
             // Apply timeline automation if available
             if (hasTimeline) {
-                applyAutomationAtTime(frameTime);
+                applyAutomationAtTime(timelineTime);
             }
+
+            // Calculate video position (with looping if timeline is longer than video)
+            let videoTime;
+            if (hasTimeline) {
+                // Calculate position within the trimmed video duration
+                const trimmedVideoDuration = trimEnd - trimStart;
+                const videoPosition = timelineTime % trimmedVideoDuration;
+                videoTime = trimStart + videoPosition;
+            } else {
+                videoTime = trimStart + (outputFrame * playbackSpeed) / TARGET_FPS;
+            }
+
+            video.currentTime = videoTime;
 
             await new Promise(resolve => {
                 video.onseeked = resolve;
@@ -2473,19 +2610,14 @@ async function convertToBinWithTimeline() {
             progressText.textContent = `${progress}%`;
         }
 
-        // If ping pong mode is enabled, add frames in reverse order
-        if (pingPongMode) {
-            document.getElementById('status').textContent = `Converting video to binary${speedInfo}${timelineInfo} (backward pass)...`;
+        // If ping pong mode is enabled and no timeline, add frames in reverse order
+        if (pingPongMode && !hasTimeline) {
+            document.getElementById('status').textContent = `Converting video to binary${speedInfo} (backward pass)...`;
 
-            for (let outputFrame = adjustedFrames - 2; outputFrame >= 0; outputFrame--) {
-                const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
-                const frameTime = sourceFrameIndex / TARGET_FPS;
+            for (let outputFrame = totalExportFrames - 2; outputFrame >= 0; outputFrame--) {
+                const sourceFrameIndex = Math.floor(outputFrame * playbackSpeed);
+                const frameTime = trimStart + sourceFrameIndex / TARGET_FPS;
                 video.currentTime = frameTime;
-
-                // Apply timeline automation if available
-                if (hasTimeline) {
-                    applyAutomationAtTime(frameTime);
-                }
 
                 await new Promise(resolve => {
                     video.onseeked = resolve;
@@ -2523,8 +2655,8 @@ async function convertToBinWithTimeline() {
         a.href = url;
 
         const nameWithoutExt = originalFileName.split('.')[0];
-        const trimInfo = `_${trimStart.toFixed(1)}s-${trimEnd.toFixed(1)}s`;
-        const pingPongSuffix = pingPongMode ? '_pingpong' : '';
+        const trimInfo = hasTimeline ? `_${Timeline.duration.toFixed(1)}s` : `_${trimStart.toFixed(1)}s-${trimEnd.toFixed(1)}s`;
+        const pingPongSuffix = pingPongMode && !hasTimeline ? '_pingpong' : '';
         const speedSuffix = playbackSpeed !== 1.0 ? `_${playbackSpeed.toFixed(1)}x` : '';
         const timelineSuffix = hasTimeline ? '_timeline' : '';
         a.download = `${nameWithoutExt}${trimInfo}${speedSuffix}${pingPongSuffix}${timelineSuffix}.bin`;
@@ -2565,8 +2697,9 @@ function saveTimeline() {
     }
 
     const timelineData = {
-        version: '1.0',
+        version: '1.1',
         duration: Timeline.duration,
+        videoDuration: Timeline.videoDuration,
         tracks: Timeline.tracks.map(track => ({
             parameter: track.parameter,
             enabled: track.enabled,
@@ -2607,6 +2740,13 @@ function loadTimeline(event) {
             // Clear existing tracks
             Timeline.tracks = [];
 
+            // Load timeline duration if available
+            if (timelineData.duration) {
+                Timeline.duration = timelineData.duration;
+                updateTimelineLengthInput();
+                updateTimelineRuler();
+            }
+
             // Load tracks
             timelineData.tracks.forEach(trackData => {
                 const track = new AutomationTrack(trackData.parameter);
@@ -2643,18 +2783,60 @@ function startAutomationLoop() {
         cancelAnimationFrame(Timeline.animationFrameId);
     }
 
+    // Initialize start time
+    const trimmedVideoDuration = trimEnd - trimStart;
+    Timeline.startTime = performance.now() - (Timeline.playheadPosition * 1000);
+    Timeline.loopCount = Math.floor(Timeline.playheadPosition / trimmedVideoDuration);
+
     function updateAutomation() {
         if (video.paused || !Timeline.tracks.length) {
             Timeline.animationFrameId = null;
             return;
         }
 
-        // Update playhead position
+        // Calculate timeline position based on elapsed time
+        const currentTime = performance.now();
+        const elapsed = (currentTime - Timeline.startTime) / 1000;
+        Timeline.playheadPosition = elapsed;
+
+        // Check if we've reached the end of the timeline
+        if (Timeline.playheadPosition >= Timeline.duration) {
+            if (shouldLoop) {
+                // Reset timeline to beginning
+                Timeline.playheadPosition = 0;
+                Timeline.startTime = currentTime;
+                Timeline.loopCount = 0;
+                video.currentTime = trimStart;
+            } else {
+                // Stop at the end
+                video.pause();
+                Timeline.animationFrameId = null;
+                return;
+            }
+        }
+
+        // Calculate video position within the timeline
+        const trimmedVideoDuration = trimEnd - trimStart;
+        const videoPosition = Timeline.playheadPosition % trimmedVideoDuration;
+        const currentLoopCount = Math.floor(Timeline.playheadPosition / trimmedVideoDuration);
+
+        // Handle video looping
+        if (currentLoopCount !== Timeline.loopCount) {
+            Timeline.loopCount = currentLoopCount;
+            video.currentTime = trimStart;
+        } else {
+            // Sync video position
+            const targetVideoTime = trimStart + videoPosition;
+            if (Math.abs(video.currentTime - targetVideoTime) > 0.1) {
+                video.currentTime = targetVideoTime;
+            }
+        }
+
+        // Update playhead visual position
         const playhead = document.getElementById('timelinePlayhead');
-        Timeline.playheadPosition = video.currentTime;
         playhead.style.left = `${Timeline.playheadPosition * Timeline.pixelsPerSecond}px`;
 
-        // Apply automation values
+        // Apply automation values at the timeline position
         applyAutomationAtTime(Timeline.playheadPosition);
 
         // Continue the loop
@@ -2668,5 +2850,13 @@ function stopAutomationLoop() {
     if (Timeline.animationFrameId) {
         cancelAnimationFrame(Timeline.animationFrameId);
         Timeline.animationFrameId = null;
+    }
+}
+
+// Update timeline length input display
+function updateTimelineLengthInput() {
+    const input = document.getElementById('timelineLength');
+    if (input) {
+        input.value = Timeline.duration.toFixed(1);
     }
 }

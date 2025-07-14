@@ -1094,6 +1094,28 @@ input[type="file"]::-webkit-file-upload-button {
     border-top: 8px solid #ff6b6b;
 }
 
+.timeline-loop-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #ff9800;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.timeline-loop-marker::after {
+    content: attr(data-loop);
+    position: absolute;
+    top: -20px;
+    left: 4px;
+    font-size: 10px;
+    color: #ff9800;
+    background: #1a1a1a;
+    padding: 2px 4px;
+    border-radius: 2px;
+}
+
 /* Toggle Timeline Button */
 .toggle-timeline {
     position: fixed;
