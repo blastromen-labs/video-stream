@@ -27,6 +27,7 @@ let hueShift = 0; // -180 to 180 degrees
 let isConnected = false;
 let trimStart = 0;
 let trimEnd = 0;
+let zoom = 1.0;  // 0.25 to 4.0 (25% to 400%)
 let xOffset = 0;  // -100 to 100 percentage
 let yOffset = 0;  // -100 to 100 percentage
 let colorizeColor = '#4a90e2';
@@ -109,10 +110,16 @@ function updatePreview() {
         // Clear the canvas before drawing to prevent trails
         previewCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
 
+        // Fill with black for letterboxing when zoomed out
+        if (zoom < 1.0) {
+            previewCtx.fillStyle = 'black';
+            previewCtx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+        }
+
         // Draw at panel resolution with crop
         previewCtx.drawImage(video,
             crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-            0, 0, PANEL_WIDTH, PANEL_HEIGHT
+            crop.destX, crop.destY, crop.destWidth, crop.destHeight
         );
 
         // Process the frame
@@ -195,6 +202,7 @@ const DEFAULT_VALUES = {
     'green': 100,          // 100%
     'blue': 100,           // 100%
     'hueShift': 0,         // 0 degrees
+    'zoom': 100,           // 100%
     'xOffset': 0,
     'yOffset': 0,
     'colorizeAmount': 0,
@@ -254,6 +262,10 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                 case 'hueShift':
                     hueShift = DEFAULT_VALUES[id];
                     syncSliderInput('hueShift', 'hueShiftInput', DEFAULT_VALUES[id]);
+                    break;
+                case 'zoom':
+                    zoom = DEFAULT_VALUES[id] / 100;
+                    syncSliderInput('zoom', 'zoomInput', DEFAULT_VALUES[id]);
                     break;
                 case 'xOffset':
                     xOffset = DEFAULT_VALUES[id];
@@ -670,9 +682,16 @@ async function convertToBin() {
 
             const crop = calculateCrop(video.videoWidth, video.videoHeight);
             ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+            // Fill with black for letterboxing when zoomed out
+            if (zoom < 1.0) {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+            }
+
             ctx.drawImage(video,
                 crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-                0, 0, PANEL_WIDTH, PANEL_HEIGHT
+                crop.destX, crop.destY, crop.destWidth, crop.destHeight
             );
 
             const rgbData = processFrame(canvas, ctx);
@@ -699,9 +718,16 @@ async function convertToBin() {
 
                 const crop = calculateCrop(video.videoWidth, video.videoHeight);
                 ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+                // Fill with black for letterboxing when zoomed out
+                if (zoom < 1.0) {
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+                }
+
                 ctx.drawImage(video,
                     crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-                    0, 0, PANEL_WIDTH, PANEL_HEIGHT
+                    crop.destX, crop.destY, crop.destWidth, crop.destHeight
                 );
 
                 const rgbData = processFrame(canvas, ctx);
@@ -770,10 +796,16 @@ async function streamVideo() {
                 // Clear the canvas before drawing to prevent trails
                 ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
 
+                // Fill with black for letterboxing when zoomed out
+                if (zoom < 1.0) {
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+                }
+
                 // Draw with crop
                 ctx.drawImage(video,
                     crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-                    0, 0, PANEL_WIDTH, PANEL_HEIGHT
+                    crop.destX, crop.destY, crop.destWidth, crop.destHeight
                 );
 
                 // Process the frame using shared processor
@@ -1103,7 +1135,13 @@ addSliderInputSync('playbackSpeed', 'playbackSpeedInput',
     (value) => parseFloat(value)
 );
 
-// Set up offset synchronized sliders
+// Set up zoom and offset synchronized sliders
+addSliderInputSync('zoom', 'zoomInput',
+    (value) => { zoom = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
+
 addSliderInputSync('xOffset', 'xOffsetInput',
     (value) => { xOffset = value; },
     (value) => Math.round(value),
@@ -1128,6 +1166,7 @@ function resetControls() {
     greenChannel = 1.0;
     blueChannel = 1.0;
     hueShift = 0;
+    zoom = 1.0;
     xOffset = 0;
     yOffset = 0;
     colorizeAmount = 0;
@@ -1191,6 +1230,7 @@ function resetControls() {
     syncSliderInput('green', 'greenInput', 100);
     syncSliderInput('blue', 'blueInput', 100);
     syncSliderInput('hueShift', 'hueShiftInput', 0);
+    syncSliderInput('zoom', 'zoomInput', 100);
     syncSliderInput('xOffset', 'xOffsetInput', 0);
     syncSliderInput('yOffset', 'yOffsetInput', 0);
     syncSliderInput('colorizeAmount', 'colorizeAmountInput', 0);
@@ -1222,6 +1262,7 @@ function randomizeControls() {
     greenChannel = (getRandomInt(50, 150) / 100); // 0.5 to 1.5
     blueChannel = (getRandomInt(50, 150) / 100);  // 0.5 to 1.5
     hueShift = getRandomInt(-180, 180);           // -180 to 180 degrees
+    zoom = getRandomInt(50, 200) / 100;          // 50% to 200%
     colorizeAmount = getRandomInt(0, 100);
     colorLevels = Math.pow(2, getRandomInt(2, 8)); // 4 to 256 colors in power of 2 steps
     oneBitMode = Math.random() < 0.5;
@@ -1247,6 +1288,7 @@ function randomizeControls() {
     syncSliderInput('green', 'greenInput', greenChannel * 100);
     syncSliderInput('blue', 'blueInput', blueChannel * 100);
     syncSliderInput('hueShift', 'hueShiftInput', hueShift);
+    syncSliderInput('zoom', 'zoomInput', zoom * 100);
     syncSliderInput('colorizeAmount', 'colorizeAmountInput', colorizeAmount);
     syncSliderInput('colorLevels', 'colorLevelsInput', colorLevels);
 
@@ -1450,28 +1492,92 @@ function calculateCrop(videoWidth, videoHeight) {
     const panelAspect = PANEL_WIDTH / PANEL_HEIGHT;
 
     let sourceWidth, sourceHeight, sourceX, sourceY;
+    let destX = 0, destY = 0, destWidth = PANEL_WIDTH, destHeight = PANEL_HEIGHT;
 
-    if (videoAspect > panelAspect) {
-        // Video is wider than panel
-        sourceHeight = videoHeight;
-        sourceWidth = videoHeight * panelAspect;
-        sourceY = 0 + (yOffset / 100 * videoHeight);
-        sourceX = ((videoWidth - sourceWidth) / 2) + (xOffset / 100 * (videoWidth - sourceWidth));
+    if (zoom >= 1.0) {
+        // ZOOM IN MODE: Crop video to fill panel completely
+        if (videoAspect > panelAspect) {
+            // Video is wider - crop width to match panel aspect
+            sourceHeight = videoHeight;
+            sourceWidth = sourceHeight * panelAspect;
+        } else {
+            // Video is taller - crop height to match panel aspect
+            sourceWidth = videoWidth;
+            sourceHeight = sourceWidth / panelAspect;
+        }
+
+        // Apply zoom in (show less content)
+        sourceWidth = sourceWidth / zoom;
+        sourceHeight = sourceHeight / zoom;
+
+        // Fill entire panel - no black bars
+        destX = 0;
+        destY = 0;
+        destWidth = PANEL_WIDTH;
+        destHeight = PANEL_HEIGHT;
     } else {
-        // Video is taller than panel
-        sourceWidth = videoWidth;
-        sourceHeight = videoWidth / panelAspect;
-        sourceX = 0;
-        sourceY = ((videoHeight - sourceHeight) / 2) + (yOffset / 100 * (videoHeight - sourceHeight));
+        // ZOOM OUT MODE: Gradually show more content with black bars
+        // We transition smoothly from cropped to full video view
+
+        // Calculate the crop we'd use at 100% zoom
+        let crop100Width, crop100Height;
+        if (videoAspect > panelAspect) {
+            crop100Height = videoHeight;
+            crop100Width = crop100Height * panelAspect;
+        } else {
+            crop100Width = videoWidth;
+            crop100Height = crop100Width / panelAspect;
+        }
+
+        // Smoothly interpolate source size between 100% crop and full video
+        // At zoom = 1.0: show crop100 size
+        // At zoom = 0.25: show full video
+        const t = Math.min((1 - zoom) / 0.75, 1); // 0 at zoom=1, 1 at zoom=0.25
+
+        sourceWidth = crop100Width + (videoWidth - crop100Width) * t;
+        sourceHeight = crop100Height + (videoHeight - crop100Height) * t;
+
+        // Ensure we don't exceed video bounds
+        sourceWidth = Math.min(sourceWidth, videoWidth);
+        sourceHeight = Math.min(sourceHeight, videoHeight);
+
+        // Now calculate how to display this source in the panel
+        // This will naturally create black bars as we show more content
+        const displayScale = Math.min(PANEL_WIDTH / sourceWidth, PANEL_HEIGHT / sourceHeight);
+
+        destWidth = sourceWidth * displayScale;
+        destHeight = sourceHeight * displayScale;
+        destX = (PANEL_WIDTH - destWidth) / 2;
+        destY = (PANEL_HEIGHT - destHeight) / 2;
     }
+
+    // Center the source area in the video
+    sourceX = (videoWidth - sourceWidth) / 2;
+    sourceY = (videoHeight - sourceHeight) / 2;
+
+    // Apply user pan offsets
+    sourceX += (xOffset / 100 * (videoWidth - sourceWidth));
+    sourceY += (yOffset / 100 * (videoHeight - sourceHeight));
+
+    // Ensure source stays within video bounds
+    sourceX = Math.max(0, Math.min(sourceX, videoWidth - sourceWidth));
+    sourceY = Math.max(0, Math.min(sourceY, videoHeight - sourceHeight));
+    sourceWidth = Math.min(sourceWidth, videoWidth - sourceX);
+    sourceHeight = Math.min(sourceHeight, videoHeight - sourceY);
 
     return {
         sourceX,
         sourceY,
         sourceWidth,
-        sourceHeight
+        sourceHeight,
+        destX,
+        destY,
+        destWidth,
+        destHeight
     };
 }
+
+
 
 // Add helper function to synchronize slider and input values
 function syncSliderInput(sliderId, inputId, value, formatter = (v) => v) {
