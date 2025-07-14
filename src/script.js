@@ -837,9 +837,9 @@ async function streamVideo() {
                 }
             }
 
-            if (elapsed >= FRAME_TIME && !video.paused) {
-                // Calculate timeline position for streaming
-                if (Timeline.tracks.length > 0) {
+            if (elapsed >= FRAME_TIME) {
+                // Calculate timeline position for streaming (only advance when not paused)
+                if (Timeline.tracks.length > 0 && !video.paused) {
                     const streamElapsed = (currentTime - streamStartTime - streamTotalPausedTime) / 1000;
                     streamTimelinePosition = streamElapsed;
 
@@ -871,6 +871,9 @@ async function streamVideo() {
                         ? `Streaming... Timeline: ${streamTimelinePosition.toFixed(1)}/${Timeline.duration}s (Video loop ${videoLoop})`
                         : `Streaming... Timeline: ${streamTimelinePosition.toFixed(1)}s`;
                     document.getElementById('status').textContent = statusText;
+                } else if (Timeline.tracks.length > 0 && video.paused) {
+                    // When paused with timeline, still apply automation but don't update position
+                    applyAutomationAtTime(streamTimelinePosition);
                 }
 
                 // Process frame using our shared function
@@ -910,31 +913,33 @@ async function streamVideo() {
 
                 lastFrameTime = currentTime;
 
-                // Check if we need to loop or handle ping pong
-                if (pingPongMode && shouldLoop) {
-                    // In ping pong mode, the timeupdate event handler will manage the playback
-                    // Just ensure we don't exit the streaming loop
-                } else if (video.currentTime >= trimEnd - 0.05) {  // Check near end, not video.ended
-                    if (shouldLoop || (Timeline.tracks.length > 0 && streamTimelinePosition < Timeline.duration)) {
-                        // Log for debugging
-                        // if (Timeline.tracks.length > 0) {
-                        //     console.log(`Video loop: Timeline at ${streamTimelinePosition.toFixed(2)}s/${Timeline.duration}s, Video at ${video.currentTime.toFixed(2)}s`);
-                        // }
+                // Check if we need to loop or handle ping pong (only when not paused)
+                if (!video.paused) {
+                    if (pingPongMode && shouldLoop) {
+                        // In ping pong mode, the timeupdate event handler will manage the playback
+                        // Just ensure we don't exit the streaming loop
+                    } else if (video.currentTime >= trimEnd - 0.05) {  // Check near end, not video.ended
+                        if (shouldLoop || (Timeline.tracks.length > 0 && streamTimelinePosition < Timeline.duration)) {
+                            // Log for debugging
+                            // if (Timeline.tracks.length > 0) {
+                            //     console.log(`Video loop: Timeline at ${streamTimelinePosition.toFixed(2)}s/${Timeline.duration}s, Video at ${video.currentTime.toFixed(2)}s`);
+                            // }
 
-                        video.currentTime = trimStart;
+                            video.currentTime = trimStart;
 
-                        // Only stop streaming if timeline is complete and loop is disabled
-                        if (Timeline.tracks.length > 0) {
-                            if (streamTimelinePosition >= Timeline.duration && !shouldLoop) {
-                                // console.log('Timeline completed, stopping stream');
+                            // Only stop streaming if timeline is complete and loop is disabled
+                            if (Timeline.tracks.length > 0) {
+                                if (streamTimelinePosition >= Timeline.duration && !shouldLoop) {
+                                    // console.log('Timeline completed, stopping stream');
+                                    isStreaming = false;
+                                    break;
+                                }
+                                // Otherwise continue - timeline hasn't finished
+                            } else if (!shouldLoop) {
+                                // No timeline, just video looping
                                 isStreaming = false;
                                 break;
                             }
-                            // Otherwise continue - timeline hasn't finished
-                        } else if (!shouldLoop) {
-                            // No timeline, just video looping
-                            isStreaming = false;
-                            break;
                         }
                     }
                 }
