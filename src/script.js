@@ -790,6 +790,11 @@ async function streamVideo() {
             const elapsed = currentTime - lastFrameTime;
 
             if (elapsed >= FRAME_TIME) {
+                // Apply timeline automation if available
+                if (Timeline.tracks.length > 0) {
+                    applyAutomationAtTime(video.currentTime);
+                }
+
                 // Process frame using our shared function
                 const crop = calculateCrop(video.videoWidth, video.videoHeight);
 
@@ -1608,5 +1613,1060 @@ function addSliderInputSync(sliderId, inputId, updateFunction, formatter = (v) =
             updateFunction(value);
             updateControls();
         };
+    }
+}
+
+// Timeline System
+const Timeline = {
+    tracks: [],
+    duration: 0,
+    zoom: 1,
+    playheadPosition: 0,
+    isPlaying: false,
+    pixelsPerSecond: 100,
+    selectedKeyframe: null,
+    selectedTrack: null,
+    animationFrameId: null
+};
+
+// Available parameters for automation
+const AUTOMATABLE_PARAMETERS = {
+    'contrast': { min: 0, max: 2, default: 1, scale: 100 },
+    'brightness': { min: -100, max: 100, default: 0, scale: 1 },
+    'shadows': { min: -100, max: 100, default: 0, scale: 1 },
+    'midtones': { min: -100, max: 100, default: 0, scale: 1 },
+    'highlights': { min: -100, max: 100, default: 0, scale: 1 },
+    'red': { min: 0, max: 2, default: 1, scale: 100 },
+    'green': { min: 0, max: 2, default: 1, scale: 100 },
+    'blue': { min: 0, max: 2, default: 1, scale: 100 },
+    'hueShift': { min: -180, max: 180, default: 0, scale: 1 },
+    'zoom': { min: 0.25, max: 4, default: 1, scale: 100 },
+    'xOffset': { min: -100, max: 100, default: 0, scale: 1 },
+    'yOffset': { min: -100, max: 100, default: 0, scale: 1 },
+    'colorizeAmount': { min: 0, max: 100, default: 0, scale: 1 },
+    'colorLevels': { min: 2, max: 256, default: 256, scale: 1 },
+    'oneBitThreshold': { min: 0, max: 255, default: 128, scale: 1 },
+    'gaussianMid': { min: 0, max: 1, default: 0.5, scale: 100 },
+    'gaussianSpread': { min: 0, max: 1, default: 0.25, scale: 100 },
+    'gaussianStrength': { min: 0, max: 1, default: 0.5, scale: 100 },
+    'colorSwapThreshold': { min: 0, max: 255, default: 30, scale: 1 },
+    'maskX': { min: -100, max: 100, default: 0, scale: 1 },
+    'maskY': { min: -100, max: 100, default: 0, scale: 1 },
+    'maskWidth': { min: 0, max: 100, default: 25, scale: 1 },
+    'maskHeight': { min: 0, max: 100, default: 25, scale: 1 }
+};
+
+// Track class
+class AutomationTrack {
+    constructor(parameter) {
+        this.id = Date.now() + Math.random();
+        this.parameter = parameter;
+        this.keyframes = [];
+        this.enabled = true;
+        this.color = '#4a90e2';
+    }
+
+    addKeyframe(time, value, easing = 'linear') {
+        const keyframe = {
+            id: Date.now() + Math.random(),
+            time: time,
+            value: value,
+            easing: easing
+        };
+
+        // Insert keyframe in sorted order
+        const insertIndex = this.keyframes.findIndex(k => k.time > time);
+        if (insertIndex === -1) {
+            this.keyframes.push(keyframe);
+        } else {
+            this.keyframes.splice(insertIndex, 0, keyframe);
+        }
+
+        return keyframe;
+    }
+
+    removeKeyframe(keyframeId) {
+        this.keyframes = this.keyframes.filter(k => k.id !== keyframeId);
+    }
+
+    getValueAtTime(time) {
+        if (this.keyframes.length === 0) {
+            return AUTOMATABLE_PARAMETERS[this.parameter].default;
+        }
+
+        if (time <= this.keyframes[0].time) {
+            return this.keyframes[0].value;
+        }
+
+        if (time >= this.keyframes[this.keyframes.length - 1].time) {
+            return this.keyframes[this.keyframes.length - 1].value;
+        }
+
+        // Find the two keyframes to interpolate between
+        for (let i = 0; i < this.keyframes.length - 1; i++) {
+            const k1 = this.keyframes[i];
+            const k2 = this.keyframes[i + 1];
+
+            if (time >= k1.time && time <= k2.time) {
+                const t = (time - k1.time) / (k2.time - k1.time);
+                return interpolate(k1.value, k2.value, t, k2.easing);
+            }
+        }
+
+        return this.keyframes[0].value;
+    }
+}
+
+// Interpolation functions
+function interpolate(start, end, t, easing) {
+    switch (easing) {
+        case 'ease-in':
+            t = t * t;
+            break;
+        case 'ease-out':
+            t = 1 - (1 - t) * (1 - t);
+            break;
+        case 'ease-in-out':
+            t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            break;
+        case 'linear':
+        default:
+            // t remains unchanged
+            break;
+    }
+
+    return start + (end - start) * t;
+}
+
+// Timeline UI Management
+function initializeTimeline() {
+    const toggleButton = document.getElementById('toggleTimeline');
+    const timelineContainer = document.getElementById('timelineContainer');
+
+    toggleButton.addEventListener('click', () => {
+        const isOpen = timelineContainer.classList.toggle('active');
+        toggleButton.textContent = isOpen ? 'Hide Timeline' : 'Show Timeline';
+        toggleButton.classList.toggle('timeline-open', isOpen);
+
+        if (isOpen && video.duration) {
+            Timeline.duration = video.duration;
+            updateTimelineRuler();
+            renderTimeline();
+
+            // Start automation loop if video is playing
+            if (!video.paused && Timeline.tracks.length > 0) {
+                startAutomationLoop();
+            }
+        } else {
+            // Stop automation loop when timeline is hidden
+            stopAutomationLoop();
+        }
+    });
+
+    // Add track button
+    document.getElementById('addTrackButton').addEventListener('click', showParameterSelector);
+
+    // Clear timeline button
+    document.getElementById('clearTimelineButton').addEventListener('click', () => {
+        if (confirm('Clear all timeline tracks?')) {
+            Timeline.tracks = [];
+            renderTimeline();
+            stopAutomationLoop();
+        }
+    });
+
+    // Timeline zoom
+    document.getElementById('timelineZoom').addEventListener('input', (e) => {
+        Timeline.zoom = parseFloat(e.target.value);
+        Timeline.pixelsPerSecond = 100 * Timeline.zoom;
+        updateTimelineRuler();
+        renderTimeline();
+    });
+
+    // Context menu
+    document.addEventListener('click', hideContextMenu);
+
+    const contextMenuItems = document.querySelectorAll('.context-menu-item');
+    contextMenuItems.forEach(item => {
+        item.addEventListener('click', handleContextMenuAction);
+    });
+
+    // Keyframe editor modal
+    document.getElementById('cancelKeyframeEdit').addEventListener('click', closeKeyframeEditor);
+    document.getElementById('saveKeyframeEdit').addEventListener('click', saveKeyframeEdit);
+    document.getElementById('modalOverlay').addEventListener('click', closeKeyframeEditor);
+
+    // Update timeline when video loads
+    video.addEventListener('loadedmetadata', () => {
+        Timeline.duration = video.duration;
+        updateTimelineRuler();
+    });
+
+    // Smooth automation updates during playback
+    video.addEventListener('play', () => {
+        if (Timeline.tracks.length > 0) {
+            startAutomationLoop();
+        }
+    });
+
+    video.addEventListener('pause', () => {
+        stopAutomationLoop();
+    });
+
+    video.addEventListener('seeked', () => {
+        // Update automation values when seeking
+        if (Timeline.tracks.length > 0) {
+            updatePlayhead();
+        }
+    });
+
+    // Click on timeline to seek
+    document.getElementById('timelineRuler').addEventListener('click', handleTimelineClick);
+    document.getElementById('timelineTracks').addEventListener('click', handleTimelineClick);
+
+    // Synchronized scrolling between headers and tracks
+    const scrollableContainer = document.querySelector('.timeline-scrollable');
+    const headersContainer = document.getElementById('timelineHeaders');
+
+    if (scrollableContainer && headersContainer) {
+        scrollableContainer.addEventListener('scroll', () => {
+            headersContainer.scrollTop = scrollableContainer.scrollTop;
+        });
+    }
+
+    // Timeline help button
+    document.getElementById('timelineHelp').addEventListener('click', () => {
+        document.getElementById('timelineHelpModal').classList.add('active');
+        document.getElementById('modalOverlay').classList.add('active');
+    });
+
+    document.getElementById('closeTimelineHelp').addEventListener('click', () => {
+        document.getElementById('timelineHelpModal').classList.remove('active');
+        document.getElementById('modalOverlay').classList.remove('active');
+    });
+
+    // Save/Load timeline
+    document.getElementById('saveTimelineButton').addEventListener('click', saveTimeline);
+    document.getElementById('loadTimelineButton').addEventListener('click', () => {
+        document.getElementById('timelineFileInput').click();
+    });
+    document.getElementById('timelineFileInput').addEventListener('change', loadTimeline);
+}
+
+// Show parameter selector for adding tracks
+function showParameterSelector() {
+    // Create parameter selector dropdown
+    const selector = document.createElement('div');
+    selector.className = 'parameter-dropdown active';
+    selector.style.position = 'fixed';
+    selector.style.left = '20px';
+    selector.style.top = '50%';
+
+    Object.keys(AUTOMATABLE_PARAMETERS).forEach(param => {
+        const option = document.createElement('div');
+        option.className = 'parameter-option';
+        option.textContent = param.charAt(0).toUpperCase() + param.slice(1).replace(/([A-Z])/g, ' $1');
+        option.dataset.parameter = param;
+        option.addEventListener('click', () => {
+            addTrack(param);
+            selector.remove();
+        });
+        selector.appendChild(option);
+    });
+
+    document.body.appendChild(selector);
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', function closeSelector(e) {
+            if (!selector.contains(e.target)) {
+                selector.remove();
+                document.removeEventListener('click', closeSelector);
+            }
+        });
+    }, 100);
+}
+
+// Add a new automation track
+function addTrack(parameter) {
+    // Check if track already exists
+    if (Timeline.tracks.find(t => t.parameter === parameter)) {
+        alert(`Track for ${parameter} already exists`);
+        return;
+    }
+
+    const track = new AutomationTrack(parameter);
+    Timeline.tracks.push(track);
+
+    // Add initial keyframe at current parameter value
+    const currentValue = getCurrentParameterValue(parameter);
+    track.addKeyframe(0, currentValue);
+
+    renderTimeline();
+
+    // Start automation loop if video is playing and this is the first track
+    if (!video.paused && Timeline.tracks.length === 1) {
+        startAutomationLoop();
+    }
+}
+
+// Get current value of a parameter
+function getCurrentParameterValue(parameter) {
+    const params = {
+        'contrast': contrast,
+        'brightness': brightness,
+        'shadows': shadows,
+        'midtones': midtones,
+        'highlights': highlights,
+        'red': redChannel,
+        'green': greenChannel,
+        'blue': blueChannel,
+        'hueShift': hueShift,
+        'zoom': zoom,
+        'xOffset': xOffset,
+        'yOffset': yOffset,
+        'colorizeAmount': colorizeAmount,
+        'colorLevels': colorLevels,
+        'oneBitThreshold': oneBitThreshold,
+        'gaussianMid': gaussianMid,
+        'gaussianSpread': gaussianSpread,
+        'gaussianStrength': gaussianStrength,
+        'colorSwapThreshold': colorSwapThreshold,
+        'maskX': maskX,
+        'maskY': maskY,
+        'maskWidth': maskWidth,
+        'maskHeight': maskHeight
+    };
+
+    return params[parameter] || AUTOMATABLE_PARAMETERS[parameter].default;
+}
+
+// Render the timeline
+function renderTimeline() {
+    const headersContainer = document.getElementById('timelineHeaders');
+    const tracksContainer = document.getElementById('timelineTracks');
+
+    headersContainer.innerHTML = '';
+    tracksContainer.innerHTML = '';
+
+    Timeline.tracks.forEach((track, index) => {
+        const { header, content } = createTrackElements(track, index);
+        headersContainer.appendChild(header);
+        tracksContainer.appendChild(content);
+    });
+}
+
+// Create track header and content elements separately
+function createTrackElements(track, index) {
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'track-header';
+    header.dataset.trackId = track.id;
+    header.innerHTML = `
+        <span>${track.parameter.charAt(0).toUpperCase() + track.parameter.slice(1).replace(/([A-Z])/g, ' $1')}</span>
+        <button class="timeline-button" style="padding: 2px 8px; font-size: 10px;" onclick="removeTrack('${track.id}')">×</button>
+    `;
+
+    // Create track content
+    const trackEl = document.createElement('div');
+    trackEl.className = 'timeline-track';
+    trackEl.dataset.trackId = track.id;
+
+    const content = document.createElement('div');
+    content.className = 'track-content';
+    content.dataset.trackId = track.id;
+    content.addEventListener('dblclick', (e) => handleTrackDoubleClick(e, track));
+
+    // Render keyframes
+    track.keyframes.forEach(keyframe => {
+        const keyframeEl = createKeyframeElement(keyframe, track);
+        content.appendChild(keyframeEl);
+    });
+
+    // Render automation curve
+    if (track.keyframes.length > 1) {
+        const curve = createAutomationCurve(track);
+        content.appendChild(curve);
+    }
+
+    trackEl.appendChild(content);
+
+    return { header, content: trackEl };
+}
+
+// Create keyframe element
+function createKeyframeElement(keyframe, track) {
+    const el = document.createElement('div');
+    el.className = 'keyframe';
+    el.dataset.keyframeId = keyframe.id;
+    el.dataset.trackId = track.id;
+    el.style.left = `${keyframe.time * Timeline.pixelsPerSecond}px`;
+
+    el.addEventListener('mousedown', startDragKeyframe);
+    el.addEventListener('contextmenu', showKeyframeContextMenu);
+
+    return el;
+}
+
+// Create automation curve visualization
+function createAutomationCurve(track) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('automation-curve');
+    svg.style.width = `${Timeline.duration * Timeline.pixelsPerSecond}px`;
+    svg.style.height = '40px';
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const pathData = generateCurvePath(track);
+    path.setAttribute('d', pathData);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', track.color);
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('opacity', '0.6');
+
+    svg.appendChild(path);
+    return svg;
+}
+
+// Generate SVG path for automation curve
+function generateCurvePath(track) {
+    if (track.keyframes.length < 2) return '';
+
+    const param = AUTOMATABLE_PARAMETERS[track.parameter];
+    const range = param.max - param.min;
+
+    let path = '';
+    const points = [];
+
+    // Sample the curve
+    for (let t = 0; t <= Timeline.duration; t += 0.1) {
+        const value = track.getValueAtTime(t);
+        const normalizedValue = (value - param.min) / range;
+        const x = t * Timeline.pixelsPerSecond;
+        const y = 35 - (normalizedValue * 30); // Invert Y and scale to track height
+        points.push({ x, y });
+    }
+
+    // Create path
+    points.forEach((point, i) => {
+        if (i === 0) {
+            path += `M ${point.x} ${point.y}`;
+        } else {
+            path += ` L ${point.x} ${point.y}`;
+        }
+    });
+
+    return path;
+}
+
+// Handle track double-click to add keyframe
+function handleTrackDoubleClick(e, track) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const time = x / Timeline.pixelsPerSecond;
+
+    if (time >= 0 && time <= Timeline.duration) {
+        const value = track.getValueAtTime(time);
+        track.addKeyframe(time, value);
+        renderTimeline();
+    }
+}
+
+// Timeline interaction handlers
+let isDraggingKeyframe = false;
+let draggedKeyframe = null;
+let draggedTrack = null;
+
+function startDragKeyframe(e) {
+    e.preventDefault();
+    isDraggingKeyframe = true;
+    draggedKeyframe = e.target;
+    const keyframeId = draggedKeyframe.dataset.keyframeId;
+    const trackId = draggedKeyframe.dataset.trackId;
+
+    draggedTrack = Timeline.tracks.find(t => t.id === parseFloat(trackId));
+    Timeline.selectedKeyframe = draggedTrack.keyframes.find(k => k.id === parseFloat(keyframeId));
+
+    document.addEventListener('mousemove', dragKeyframe);
+    document.addEventListener('mouseup', stopDragKeyframe);
+}
+
+function dragKeyframe(e) {
+    if (!isDraggingKeyframe || !draggedKeyframe) return;
+
+    const trackContent = draggedKeyframe.parentElement;
+    const rect = trackContent.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const time = x / Timeline.pixelsPerSecond;
+
+    Timeline.selectedKeyframe.time = Math.max(0, Math.min(time, Timeline.duration));
+    draggedKeyframe.style.left = `${Timeline.selectedKeyframe.time * Timeline.pixelsPerSecond}px`;
+
+    // Re-sort keyframes
+    draggedTrack.keyframes.sort((a, b) => a.time - b.time);
+}
+
+function stopDragKeyframe() {
+    isDraggingKeyframe = false;
+    draggedKeyframe = null;
+    document.removeEventListener('mousemove', dragKeyframe);
+    document.removeEventListener('mouseup', stopDragKeyframe);
+    renderTimeline();
+}
+
+// Context menu handlers
+function showKeyframeContextMenu(e) {
+    e.preventDefault();
+    const menu = document.getElementById('timelineContextMenu');
+    menu.style.left = `${e.pageX}px`;
+    menu.style.top = `${e.pageY}px`;
+    menu.classList.add('active');
+
+    const keyframeId = e.target.dataset.keyframeId;
+    const trackId = e.target.dataset.trackId;
+
+    Timeline.selectedTrack = Timeline.tracks.find(t => t.id === parseFloat(trackId));
+    Timeline.selectedKeyframe = Timeline.selectedTrack.keyframes.find(k => k.id === parseFloat(keyframeId));
+}
+
+function hideContextMenu() {
+    document.getElementById('timelineContextMenu').classList.remove('active');
+}
+
+function handleContextMenuAction(e) {
+    const action = e.target.dataset.action;
+
+    if (action === 'edit') {
+        openKeyframeEditor();
+    } else if (action === 'delete') {
+        if (Timeline.selectedTrack && Timeline.selectedKeyframe) {
+            Timeline.selectedTrack.removeKeyframe(Timeline.selectedKeyframe.id);
+            renderTimeline();
+        }
+    }
+
+    hideContextMenu();
+}
+
+// Keyframe editor
+function openKeyframeEditor() {
+    if (!Timeline.selectedKeyframe || !Timeline.selectedTrack) return;
+
+    const modal = document.getElementById('keyframeEditor');
+    const overlay = document.getElementById('modalOverlay');
+
+    document.getElementById('keyframeTime').value = Timeline.selectedKeyframe.time.toFixed(1);
+    document.getElementById('keyframeValue').value = Timeline.selectedKeyframe.value;
+    document.getElementById('keyframeEasing').value = Timeline.selectedKeyframe.easing;
+
+    const param = AUTOMATABLE_PARAMETERS[Timeline.selectedTrack.parameter];
+    document.getElementById('keyframeValue').min = param.min;
+    document.getElementById('keyframeValue').max = param.max;
+    document.getElementById('keyframeValue').step = param.scale === 1 ? 1 : 0.01;
+
+    modal.classList.add('active');
+    overlay.classList.add('active');
+}
+
+function closeKeyframeEditor() {
+    document.getElementById('keyframeEditor').classList.remove('active');
+    document.getElementById('modalOverlay').classList.remove('active');
+}
+
+function saveKeyframeEdit() {
+    if (!Timeline.selectedKeyframe) return;
+
+    Timeline.selectedKeyframe.time = parseFloat(document.getElementById('keyframeTime').value);
+    Timeline.selectedKeyframe.value = parseFloat(document.getElementById('keyframeValue').value);
+    Timeline.selectedKeyframe.easing = document.getElementById('keyframeEasing').value;
+
+    // Re-sort keyframes
+    Timeline.selectedTrack.keyframes.sort((a, b) => a.time - b.time);
+
+    renderTimeline();
+    closeKeyframeEditor();
+}
+
+// Timeline ruler
+function updateTimelineRuler() {
+    const ruler = document.getElementById('timelineRuler');
+    const tracks = document.getElementById('timelineTracks');
+    const timelineWidth = Timeline.duration * Timeline.pixelsPerSecond;
+
+    ruler.innerHTML = '';
+    ruler.style.width = `${timelineWidth}px`;
+    tracks.style.minWidth = `${timelineWidth}px`;
+
+    // Add time markers
+    const markerInterval = Timeline.zoom < 1 ? 5 : Timeline.zoom < 2 ? 2 : 1;
+    for (let t = 0; t <= Timeline.duration; t += markerInterval) {
+        const marker = document.createElement('div');
+        marker.className = 'timeline-time-marker';
+        if (t === 0) {
+            marker.className += ' zero-marker';
+        }
+        marker.style.left = `${t * Timeline.pixelsPerSecond}px`;
+        marker.textContent = `${t}s`;
+        ruler.appendChild(marker);
+    }
+}
+
+// Playhead management
+function updatePlayhead() {
+    const playhead = document.getElementById('timelinePlayhead');
+    Timeline.playheadPosition = video.currentTime;
+    playhead.style.left = `${Timeline.playheadPosition * Timeline.pixelsPerSecond}px`;
+
+    // Apply automation values if not already being updated by the animation loop
+    if (!Timeline.animationFrameId && Timeline.tracks.length > 0) {
+        applyAutomationAtTime(Timeline.playheadPosition);
+    }
+}
+
+// Apply automation values at specific time
+function applyAutomationAtTime(time) {
+    let hasChanges = false;
+
+    Timeline.tracks.forEach(track => {
+        if (!track.enabled) return;
+
+        const value = track.getValueAtTime(time);
+        const currentValue = getCurrentParameterValue(track.parameter);
+
+        // Only update if value has changed significantly
+        if (Math.abs(value - currentValue) > 0.001) {
+            setParameterValue(track.parameter, value);
+            hasChanges = true;
+        }
+    });
+
+    // Only trigger preview update if we're not streaming and values changed
+    if (!isStreaming && hasChanges) {
+        // The preview loop will automatically pick up the parameter changes
+        // No need to call updateControls() as it would cause duplicate updates
+    }
+}
+
+// Set parameter value
+function setParameterValue(parameter, value) {
+    const param = AUTOMATABLE_PARAMETERS[parameter];
+
+    switch (parameter) {
+        case 'contrast':
+            contrast = value;
+            syncSliderInputQuiet('contrast', 'contrastInput', value * param.scale);
+            break;
+        case 'brightness':
+            brightness = value;
+            syncSliderInputQuiet('brightness', 'brightnessInput', value);
+            break;
+        case 'shadows':
+            shadows = value;
+            syncSliderInputQuiet('shadows', 'shadowsInput', value);
+            break;
+        case 'midtones':
+            midtones = value;
+            syncSliderInputQuiet('midtones', 'midtonesInput', value);
+            break;
+        case 'highlights':
+            highlights = value;
+            syncSliderInputQuiet('highlights', 'highlightsInput', value);
+            break;
+        case 'red':
+            redChannel = value;
+            syncSliderInputQuiet('red', 'redInput', value * param.scale);
+            break;
+        case 'green':
+            greenChannel = value;
+            syncSliderInputQuiet('green', 'greenInput', value * param.scale);
+            break;
+        case 'blue':
+            blueChannel = value;
+            syncSliderInputQuiet('blue', 'blueInput', value * param.scale);
+            break;
+        case 'hueShift':
+            hueShift = value;
+            syncSliderInputQuiet('hueShift', 'hueShiftInput', value);
+            break;
+        case 'zoom':
+            zoom = value;
+            syncSliderInputQuiet('zoom', 'zoomInput', value * param.scale);
+            break;
+        case 'xOffset':
+            xOffset = value;
+            syncSliderInputQuiet('xOffset', 'xOffsetInput', value);
+            break;
+        case 'yOffset':
+            yOffset = value;
+            syncSliderInputQuiet('yOffset', 'yOffsetInput', value);
+            break;
+        case 'colorizeAmount':
+            colorizeAmount = value;
+            syncSliderInputQuiet('colorizeAmount', 'colorizeAmountInput', value);
+            break;
+        case 'colorLevels':
+            colorLevels = value;
+            syncSliderInputQuiet('colorLevels', 'colorLevelsInput', value);
+            break;
+        case 'oneBitThreshold':
+            oneBitThreshold = value;
+            syncSliderInputQuiet('oneBitThreshold', 'oneBitThresholdInput', value);
+            break;
+        case 'gaussianMid':
+            gaussianMid = value;
+            syncSliderInputQuiet('gaussianMid', 'gaussianMidInput', value * param.scale);
+            break;
+        case 'gaussianSpread':
+            gaussianSpread = value;
+            syncSliderInputQuiet('gaussianSpread', 'gaussianSpreadInput', value * param.scale);
+            break;
+        case 'gaussianStrength':
+            gaussianStrength = value;
+            syncSliderInputQuiet('gaussianStrength', 'gaussianStrengthInput', value * param.scale);
+            break;
+        case 'colorSwapThreshold':
+            colorSwapThreshold = value;
+            syncSliderInputQuiet('colorSwapThreshold', 'colorSwapThresholdInput', value);
+            break;
+        case 'maskX':
+            maskX = value;
+            syncSliderInputQuiet('maskX', 'maskXInput', value);
+            break;
+        case 'maskY':
+            maskY = value;
+            syncSliderInputQuiet('maskY', 'maskYInput', value);
+            break;
+        case 'maskWidth':
+            maskWidth = value;
+            syncSliderInputQuiet('maskWidth', 'maskWidthInput', value);
+            break;
+        case 'maskHeight':
+            maskHeight = value;
+            syncSliderInputQuiet('maskHeight', 'maskHeightInput', value);
+            break;
+    }
+}
+
+// Add a quiet version of syncSliderInput that doesn't trigger updateControls
+function syncSliderInputQuiet(sliderId, inputId, value, formatter = null) {
+    const slider = document.getElementById(sliderId);
+    const input = document.getElementById(inputId);
+    if (slider && input) {
+        // Temporarily remove event listeners to avoid triggering updateControls
+        const oldSliderHandler = slider.oninput;
+        const oldInputHandler = input.oninput;
+
+        slider.oninput = null;
+        input.oninput = null;
+
+        slider.value = value;
+        input.value = formatter ? formatter(value) : value;
+
+        // Restore event listeners after a tiny delay
+        setTimeout(() => {
+            slider.oninput = oldSliderHandler;
+            input.oninput = oldInputHandler;
+        }, 0);
+    }
+}
+
+// Handle timeline click to seek
+function handleTimelineClick(e) {
+    if (e.target.classList.contains('keyframe')) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const time = Math.max(0, Math.min(x / Timeline.pixelsPerSecond, Timeline.duration));
+
+    video.currentTime = time;
+}
+
+// Remove track
+function removeTrack(trackId) {
+    Timeline.tracks = Timeline.tracks.filter(t => t.id !== parseFloat(trackId));
+    renderTimeline();
+
+    // Stop automation loop if no tracks remain
+    if (Timeline.tracks.length === 0) {
+        stopAutomationLoop();
+    }
+}
+
+// Modified convertToBin function to support timeline
+async function convertToBinWithTimeline() {
+    if (!video.src) {
+        document.getElementById('status').className = 'error';
+        document.getElementById('status').textContent = 'Please select a video file';
+        return;
+    }
+
+    const progressBar = document.getElementById('conversionProgress');
+    const progressFill = progressBar.querySelector('.progress-fill');
+    const progressText = progressBar.querySelector('.progress-text');
+
+    progressBar.style.display = 'block';
+    document.getElementById('downloadBinButton').disabled = true;
+    document.getElementById('status').className = 'info';
+
+    const hasTimeline = Timeline.tracks.length > 0;
+    const speedInfo = playbackSpeed !== 1.0 ? ` at ${playbackSpeed.toFixed(1)}x speed` : '';
+    const timelineInfo = hasTimeline ? ' with timeline automation' : '';
+    document.getElementById('status').textContent = `Converting video to binary${speedInfo}${timelineInfo}...`;
+
+    // Calculate frames from trim points
+    const startFrame = Math.floor(trimStart * TARGET_FPS);
+    const endFrame = Math.floor(trimEnd * TARGET_FPS);
+    const sourceFrames = endFrame - startFrame;
+
+    // Adjust total frames based on playback speed
+    const adjustedFrames = Math.floor(sourceFrames / playbackSpeed);
+    const totalFrames = pingPongMode ? adjustedFrames * 2 : adjustedFrames;
+    let currentFrame = 0;
+
+    // Create a buffer to hold trimmed frames
+    const binData = new Uint8Array(totalFrames * FRAME_SIZE);
+    let binOffset = 0;
+
+    // Save current video time and playback state
+    const originalTime = video.currentTime;
+    const wasPlaying = !video.paused;
+    if (wasPlaying) {
+        video.pause();
+    }
+
+    try {
+        // Process frames based on playback speed
+        for (let outputFrame = 0; outputFrame < adjustedFrames; outputFrame++) {
+            const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
+            const frameTime = sourceFrameIndex / TARGET_FPS;
+            video.currentTime = frameTime;
+
+            // Apply timeline automation if available
+            if (hasTimeline) {
+                applyAutomationAtTime(frameTime);
+            }
+
+            await new Promise(resolve => {
+                video.onseeked = resolve;
+            });
+
+            const crop = calculateCrop(video.videoWidth, video.videoHeight);
+            ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+            // Fill with black for letterboxing when zoomed out
+            if (zoom < 1.0) {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+            }
+
+            ctx.drawImage(video,
+                crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
+                crop.destX, crop.destY, crop.destWidth, crop.destHeight
+            );
+
+            const rgbData = processFrame(canvas, ctx);
+            binData.set(rgbData, binOffset);
+            binOffset += rgbData.length;
+
+            currentFrame++;
+            const progress = Math.floor((currentFrame / totalFrames) * 100);
+            progressFill.style.width = `${progress}%`;
+            progressText.textContent = `${progress}%`;
+        }
+
+        // If ping pong mode is enabled, add frames in reverse order
+        if (pingPongMode) {
+            document.getElementById('status').textContent = `Converting video to binary${speedInfo}${timelineInfo} (backward pass)...`;
+
+            for (let outputFrame = adjustedFrames - 2; outputFrame >= 0; outputFrame--) {
+                const sourceFrameIndex = startFrame + Math.floor(outputFrame * playbackSpeed);
+                const frameTime = sourceFrameIndex / TARGET_FPS;
+                video.currentTime = frameTime;
+
+                // Apply timeline automation if available
+                if (hasTimeline) {
+                    applyAutomationAtTime(frameTime);
+                }
+
+                await new Promise(resolve => {
+                    video.onseeked = resolve;
+                });
+
+                const crop = calculateCrop(video.videoWidth, video.videoHeight);
+                ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+                // Fill with black for letterboxing when zoomed out
+                if (zoom < 1.0) {
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+                }
+
+                ctx.drawImage(video,
+                    crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
+                    crop.destX, crop.destY, crop.destWidth, crop.destHeight
+                );
+
+                const rgbData = processFrame(canvas, ctx);
+                binData.set(rgbData, binOffset);
+                binOffset += rgbData.length;
+
+                currentFrame++;
+                const progress = Math.floor((currentFrame / totalFrames) * 100);
+                progressFill.style.width = `${progress}%`;
+                progressText.textContent = `${progress}%`;
+            }
+        }
+
+        // Create and download the binary file
+        const blob = new Blob([binData], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+
+        const nameWithoutExt = originalFileName.split('.')[0];
+        const trimInfo = `_${trimStart.toFixed(1)}s-${trimEnd.toFixed(1)}s`;
+        const pingPongSuffix = pingPongMode ? '_pingpong' : '';
+        const speedSuffix = playbackSpeed !== 1.0 ? `_${playbackSpeed.toFixed(1)}x` : '';
+        const timelineSuffix = hasTimeline ? '_timeline' : '';
+        a.download = `${nameWithoutExt}${trimInfo}${speedSuffix}${pingPongSuffix}${timelineSuffix}.bin`;
+
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        document.getElementById('status').className = 'success';
+        document.getElementById('status').textContent = 'Binary file downloaded!';
+    } catch (error) {
+        document.getElementById('status').className = 'error';
+        document.getElementById('status').textContent = 'Error converting video: ' + error.message;
+    } finally {
+        // Restore video state
+        video.currentTime = originalTime;
+        video.playbackRate = playbackSpeed;
+        if (wasPlaying && isStreaming) {
+            video.play();
+        }
+        document.getElementById('downloadBinButton').disabled = false;
+        progressBar.style.display = 'none';
+    }
+}
+
+// Override the original convertToBin function
+convertToBin = convertToBinWithTimeline;
+
+// Initialize timeline when DOM is loaded
+initializeTimeline();
+
+// Save timeline to JSON file
+function saveTimeline() {
+    if (Timeline.tracks.length === 0) {
+        alert('No timeline tracks to save');
+        return;
+    }
+
+    const timelineData = {
+        version: '1.0',
+        duration: Timeline.duration,
+        tracks: Timeline.tracks.map(track => ({
+            parameter: track.parameter,
+            enabled: track.enabled,
+            color: track.color,
+            keyframes: track.keyframes.map(kf => ({
+                time: kf.time,
+                value: kf.value,
+                easing: kf.easing
+            }))
+        }))
+    };
+
+    const blob = new Blob([JSON.stringify(timelineData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timeline_${originalFileName.split('.')[0] || 'preset'}_${new Date().getTime()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Load timeline from JSON file
+function loadTimeline(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const timelineData = JSON.parse(e.target.result);
+
+            if (!timelineData.version || !timelineData.tracks) {
+                throw new Error('Invalid timeline file format');
+            }
+
+            // Clear existing tracks
+            Timeline.tracks = [];
+
+            // Load tracks
+            timelineData.tracks.forEach(trackData => {
+                const track = new AutomationTrack(trackData.parameter);
+                track.enabled = trackData.enabled !== undefined ? trackData.enabled : true;
+                track.color = trackData.color || '#4a90e2';
+
+                // Clear default keyframe
+                track.keyframes = [];
+
+                // Add loaded keyframes
+                trackData.keyframes.forEach(kf => {
+                    track.addKeyframe(kf.time, kf.value, kf.easing || 'linear');
+                });
+
+                Timeline.tracks.push(track);
+            });
+
+            renderTimeline();
+            document.getElementById('status').className = 'success';
+            document.getElementById('status').textContent = 'Timeline loaded successfully';
+        } catch (error) {
+            document.getElementById('status').className = 'error';
+            document.getElementById('status').textContent = 'Error loading timeline: ' + error.message;
+        }
+    };
+
+    reader.readAsText(file);
+    event.target.value = ''; // Reset file input
+}
+
+// Smooth automation update loop
+function startAutomationLoop() {
+    if (Timeline.animationFrameId) {
+        cancelAnimationFrame(Timeline.animationFrameId);
+    }
+
+    function updateAutomation() {
+        if (video.paused || !Timeline.tracks.length) {
+            Timeline.animationFrameId = null;
+            return;
+        }
+
+        // Update playhead position
+        const playhead = document.getElementById('timelinePlayhead');
+        Timeline.playheadPosition = video.currentTime;
+        playhead.style.left = `${Timeline.playheadPosition * Timeline.pixelsPerSecond}px`;
+
+        // Apply automation values
+        applyAutomationAtTime(Timeline.playheadPosition);
+
+        // Continue the loop
+        Timeline.animationFrameId = requestAnimationFrame(updateAutomation);
+    }
+
+    updateAutomation();
+}
+
+function stopAutomationLoop() {
+    if (Timeline.animationFrameId) {
+        cancelAnimationFrame(Timeline.animationFrameId);
+        Timeline.animationFrameId = null;
     }
 }

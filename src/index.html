@@ -311,6 +311,115 @@
         </div>
         <canvas id="processCanvas"></canvas>
     </div>
+
+    <!-- Timeline Toggle Button -->
+    <button id="toggleTimeline" class="toggle-timeline">Show Timeline</button>
+
+    <!-- Timeline Help Button -->
+    <button id="timelineHelp" class="timeline-button"
+        style="position: fixed; bottom: 360px; right: 20px; z-index: 999;">Timeline Help</button>
+
+    <!-- Timeline Container -->
+    <div id="timelineContainer" class="timeline-container">
+        <div class="timeline-header">
+            <div class="timeline-title">Timeline</div>
+            <div class="timeline-controls">
+                <button id="addTrackButton" class="timeline-button">Add Track</button>
+                <button id="clearTimelineButton" class="timeline-button">Clear All</button>
+                <button id="saveTimelineButton" class="timeline-button">Save Timeline</button>
+                <button id="loadTimelineButton" class="timeline-button">Load Timeline</button>
+                <input type="file" id="timelineFileInput" accept=".json" style="display: none;">
+                <div class="timeline-zoom-controls">
+                    <label>Zoom:</label>
+                    <input type="range" id="timelineZoom" class="timeline-zoom-slider" min="0.5" max="5" step="0.1"
+                        value="1">
+                </div>
+            </div>
+        </div>
+        <div class="timeline-content">
+            <div class="timeline-left-panel">
+                <div class="timeline-ruler-spacer"></div>
+                <div class="timeline-headers" id="timelineHeaders"></div>
+            </div>
+            <div class="timeline-scrollable">
+                <div class="timeline-ruler" id="timelineRuler"></div>
+                <div class="timeline-tracks" id="timelineTracks"></div>
+                <div class="timeline-playhead" id="timelinePlayhead"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="timelineContextMenu" class="timeline-context-menu">
+        <div class="context-menu-item" data-action="edit">Edit Keyframe</div>
+        <div class="context-menu-item" data-action="delete">Delete Keyframe</div>
+    </div>
+
+    <!-- Keyframe Editor Modal -->
+    <div id="modalOverlay" class="modal-overlay"></div>
+    <div id="keyframeEditor" class="keyframe-editor-modal">
+        <div class="keyframe-editor-header">Edit Keyframe</div>
+        <div class="keyframe-editor-content">
+            <div class="keyframe-input-group">
+                <label>Time (s):</label>
+                <input type="number" id="keyframeTime" step="0.1" min="0">
+            </div>
+            <div class="keyframe-input-group">
+                <label>Value:</label>
+                <input type="number" id="keyframeValue" step="0.01">
+            </div>
+            <div class="keyframe-input-group">
+                <label>Easing:</label>
+                <select id="keyframeEasing">
+                    <option value="linear">Linear</option>
+                    <option value="ease-in">Ease In</option>
+                    <option value="ease-out">Ease Out</option>
+                    <option value="ease-in-out">Ease In-Out</option>
+                </select>
+            </div>
+        </div>
+        <div class="keyframe-editor-buttons">
+            <button id="cancelKeyframeEdit" class="timeline-button">Cancel</button>
+            <button id="saveKeyframeEdit" class="timeline-button">Save</button>
+        </div>
+    </div>
+
+    <!-- Timeline Help Modal -->
+    <div id="timelineHelpModal" class="keyframe-editor-modal" style="min-width: 500px; max-width: 600px;">
+        <div class="keyframe-editor-header">Timeline Feature Guide</div>
+        <div class="keyframe-editor-content" style="max-height: 400px; overflow-y: auto;">
+            <h3 style="color: #4a90e2; margin-top: 0;">Getting Started</h3>
+            <p style="color: #ccc; font-size: 14px; line-height: 1.5;">
+                The timeline allows you to create smooth animations by changing parameters over time.
+            </p>
+
+            <h3 style="color: #4a90e2;">How to Use:</h3>
+            <ol style="color: #ccc; font-size: 14px; line-height: 1.8;">
+                <li><strong>Show Timeline:</strong> Click "Show Timeline" button to open the timeline panel</li>
+                <li><strong>Add Track:</strong> Click "Add Track" and select a parameter to automate (e.g., Zoom, Hue, X
+                    Offset)</li>
+                <li><strong>Add Keyframes:</strong> Double-click on a track to add a keyframe at that time</li>
+                <li><strong>Edit Keyframes:</strong> Right-click on a keyframe to edit its value and easing</li>
+                <li><strong>Drag Keyframes:</strong> Click and drag keyframes to change their timing</li>
+                <li><strong>Zoom Timeline:</strong> Use the zoom slider to see more or less detail</li>
+                <li><strong>Preview:</strong> Play the video to see your automation in action</li>
+                <li><strong>Export:</strong> Click "Download .bin" to export with timeline automation applied</li>
+            </ol>
+
+            <h3 style="color: #4a90e2;">Tips:</h3>
+            <ul style="color: #ccc; font-size: 14px; line-height: 1.8;">
+                <li>Multiple parameters can be automated simultaneously</li>
+                <li>Easing options (Linear, Ease In/Out) create smooth transitions</li>
+                <li>Click on the timeline ruler to jump to specific times</li>
+                <li>The red playhead shows current video position</li>
+                <li>Exported files will have "_timeline" suffix when automation is used</li>
+            </ul>
+        </div>
+        <div class="keyframe-editor-buttons">
+            <button id="closeTimelineHelp" class="timeline-button">Close</button>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 
