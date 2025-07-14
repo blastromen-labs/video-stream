@@ -2214,8 +2214,8 @@ function createTrackElements(track, index) {
     header.className = 'track-header';
     header.dataset.trackId = track.id;
     header.innerHTML = `
-        <span>${track.parameter.charAt(0).toUpperCase() + track.parameter.slice(1).replace(/([A-Z])/g, ' $1')}</span>
-        <button class="timeline-button" style="padding: 2px 8px; font-size: 10px;" onclick="removeTrack('${track.id}')">×</button>
+        <button class="track-remove-button" onclick="removeTrack('${track.id}')">×</button>
+        <span class="track-name">${track.parameter.charAt(0).toUpperCase() + track.parameter.slice(1).replace(/([A-Z])/g, ' $1')}</span>
     `;
 
     // Create track content
