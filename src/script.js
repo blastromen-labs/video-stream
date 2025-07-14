@@ -772,6 +772,7 @@ async function convertToBin() {
         }
         document.getElementById('downloadBinButton').disabled = false;
         progressBar.style.display = 'none';
+        isExporting = false; // Reset export flag
     }
 }
 
@@ -1162,19 +1163,9 @@ video.addEventListener('loadedmetadata', updateTrimControls);
 function updateTimelineDurationFromTrim() {
     // Only update if not custom duration
     if (!Timeline.isCustomDuration) {
-        const oldDuration = Timeline.duration;
         Timeline.duration = Math.max(trimEnd - trimStart, 0.1); // Ensure minimum duration
-        console.log('Timeline duration updated from trim:', {
-            oldDuration: oldDuration,
-            newDuration: Timeline.duration,
-            trimStart: trimStart,
-            trimEnd: trimEnd,
-            trimDuration: trimEnd - trimStart
-        });
         updateTimelineLengthInput();
         updateTimelineRuler();
-    } else {
-        console.log('Trim changed but timeline has custom duration, not updating');
     }
 }
 
@@ -2006,11 +1997,6 @@ function initializeTimeline() {
 
     timelineLengthInput.addEventListener('change', (e) => {
         const newDuration = parseFloat(e.target.value);
-        console.log('Timeline duration changed by user:', {
-            oldDuration: Timeline.duration,
-            newDuration: newDuration,
-            isValid: newDuration > 0
-        });
 
         if (newDuration > 0) {
             Timeline.duration = newDuration;
@@ -2018,13 +2004,11 @@ function initializeTimeline() {
             Timeline.isCustomDuration = Math.abs(newDuration - (trimEnd - trimStart)) > 0.1;
             updateTimelineRuler();
             renderTimeline();
-            console.log('Timeline duration set to:', Timeline.duration, 'seconds');
         } else {
             // Reset to current trim duration if invalid
             Timeline.duration = Math.max(trimEnd - trimStart, 0.1);
             Timeline.isCustomDuration = false;
             updateTimelineLengthInput();
-            console.log('Timeline duration reset to trim:', Timeline.duration, 'seconds');
         }
     });
 
@@ -2058,7 +2042,7 @@ function initializeTimeline() {
 
     video.addEventListener('seeked', () => {
         // When user manually seeks video, update timeline position
-        if (Timeline.tracks.length > 0 && !Timeline.animationFrameId) {
+        if (Timeline.tracks.length > 0 && !Timeline.animationFrameId && !isExporting) {
             // Calculate timeline position based on video position
             const trimmedVideoDuration = trimEnd - trimStart;
             const videoPositionInTrim = video.currentTime - trimStart;
@@ -2523,6 +2507,8 @@ function applyAutomationAtTime(time) {
         if (Math.abs(value - currentValue) > 0.001) {
             setParameterValue(track.parameter, value);
             hasChanges = true;
+
+
         }
     });
 
@@ -2704,26 +2690,41 @@ function removeTrack(trackId) {
 }
 
 // Modified convertToBin function to support timeline
+let isExporting = false; // Global flag to prevent interference during export
+
 async function convertToBinWithTimeline() {
+    isExporting = true; // Set flag at start of export
+
+    // Check if Timeline object exists
+    if (typeof Timeline === 'undefined') {
+        alert('Timeline system not initialized. Please refresh the page.');
+        isExporting = false;
+        return;
+    }
+
     if (!video.src) {
         document.getElementById('status').className = 'error';
         document.getElementById('status').textContent = 'Please select a video file';
         return;
     }
 
-    // Ensure timeline duration is valid
+    // Early check for Timeline duration
     if (Timeline.duration <= 0 || !isFinite(Timeline.duration)) {
-        console.error('Invalid timeline duration:', Timeline.duration);
-        Timeline.duration = Math.max(trimEnd - trimStart, 0.1);
-        console.log('Corrected timeline duration to:', Timeline.duration);
+        alert('Invalid timeline duration. Please check your timeline settings.');
+        return;
     }
 
-    // If trimEnd is 0, set it to video duration
-    if (trimEnd === 0 && video.duration > 0) {
-        trimEnd = video.duration;
-        Timeline.duration = trimEnd - trimStart;
-        console.log('Set trimEnd to video duration:', trimEnd);
+    // Ensure trim values are valid
+    if (trimEnd === 0 || trimEnd <= trimStart) {
+        if (video.duration > 0) {
+            trimEnd = video.duration;
+        } else {
+            // If no video duration available, use timeline duration
+            trimEnd = trimStart + Timeline.duration;
+        }
     }
+
+    // Only update timeline duration if not custom
 
     const progressBar = document.getElementById('conversionProgress');
     const progressFill = progressBar.querySelector('.progress-fill');
@@ -2738,50 +2739,33 @@ async function convertToBinWithTimeline() {
     const automationInfo = hasAutomation ? ' with automation' : '';
     document.getElementById('status').textContent = `Converting video to binary${speedInfo}${automationInfo}...`;
 
-    // Debug logging
-    console.log('Export Debug:', {
-        timelineDuration: Timeline.duration,
-        trimStart: trimStart,
-        trimEnd: trimEnd,
-        trimDuration: trimEnd - trimStart,
-        isCustomDuration: Timeline.isCustomDuration,
-        videoDuration: video.duration,
-        videoSrc: video.src
-    });
+    // Save the timeline duration at the start to ensure it doesn't get changed
+    const targetExportDuration = Timeline.duration;
+
+    // Double-check the locked duration is valid
+    if (targetExportDuration <= 0 || !isFinite(targetExportDuration)) {
+        alert('Invalid timeline duration. Please check your timeline settings.');
+        return;
+    }
 
     // Always use timeline duration for export
-    const exportDuration = Timeline.duration;
+    const exportDuration = targetExportDuration;
     const totalExportFrames = Math.floor(exportDuration * TARGET_FPS / playbackSpeed);
 
-    // Prominent log for debugging
-    console.log('🎬 EXPORTING BINARY FILE:');
-    console.log(`  Duration: ${exportDuration} seconds`);
-    console.log(`  Total frames: ${totalExportFrames}`);
-    console.log(`  Frame rate: ${TARGET_FPS} fps`);
-    console.log(`  Playback speed: ${playbackSpeed}x`);
-    console.log(`  Trim: ${trimStart.toFixed(1)}s to ${trimEnd.toFixed(1)}s`);
-
-    console.log('Export will generate:', {
-        exportDuration: exportDuration + ' seconds',
-        totalFrames: totalExportFrames,
-        frameRate: TARGET_FPS + ' fps',
-        playbackSpeed: playbackSpeed + 'x'
-    });
-
     // For ping pong mode, only apply at video level if timeline matches video duration
-    const trimmedVideoDuration = trimEnd - trimStart;
+    const trimmedVideoDuration = Math.max(trimEnd - trimStart, 0.1);
+
+    // Ensure we have a valid video duration to work with
+    if (trimmedVideoDuration <= 0.1 || !isFinite(trimmedVideoDuration)) {
+        alert('Invalid video trim settings. Please check your trim points.');
+        return;
+    }
+
     const isDefaultTimeline = Math.abs(Timeline.duration - trimmedVideoDuration) < 0.1;
     const totalFrames = pingPongMode && isDefaultTimeline ? totalExportFrames * 2 : totalExportFrames;
     let currentFrame = 0;
 
-    console.log('📊 Export calculations:', {
-        timelineDuration: Timeline.duration,
-        trimmedVideoDuration: trimmedVideoDuration,
-        isDefaultTimeline: isDefaultTimeline,
-        totalExportFrames: totalExportFrames,
-        totalFrames: totalFrames,
-        willAddPingPongFrames: pingPongMode && isDefaultTimeline
-    });
+
 
     // Create a buffer to hold all frames
     const binData = new Uint8Array(totalFrames * FRAME_SIZE);
@@ -2796,30 +2780,14 @@ async function convertToBinWithTimeline() {
 
     try {
         // Process frames for the entire timeline duration
-        console.log(`🎯 Starting export loop for ${totalExportFrames} frames`);
-
         let lastSuccessfulFrame = -1;
 
         for (let outputFrame = 0; outputFrame < totalExportFrames; outputFrame++) {
-            // Calculate timeline time for this frame
-            const timelineTime = (outputFrame * playbackSpeed) / TARGET_FPS;
+            // Calculate timeline time for this frame - this should go from 0 to exportDuration
+            const frameTimelineTime = (outputFrame * playbackSpeed) / TARGET_FPS;
+            const timelineTime = frameTimelineTime;
 
-            // More detailed progress logging
-            if (outputFrame % 10 === 0 || outputFrame === totalExportFrames - 1) {
-                console.log(`Frame ${outputFrame}/${totalExportFrames}:`, {
-                    timelineTime: timelineTime.toFixed(2) + 's',
-                    trimmedVideoDuration: trimmedVideoDuration.toFixed(2) + 's',
-                    loopNumber: Math.floor(timelineTime / trimmedVideoDuration) + 1,
-                    progressPercent: ((outputFrame / totalExportFrames) * 100).toFixed(1) + '%'
-                });
-            }
 
-            // Log when we're about to loop the video
-            const previousLoop = Math.floor(((outputFrame - 1) * playbackSpeed) / TARGET_FPS / trimmedVideoDuration);
-            const currentLoop = Math.floor(timelineTime / trimmedVideoDuration);
-            if (previousLoop < currentLoop && outputFrame > 0) {
-                console.log(`🔄 Video looping from loop ${previousLoop + 1} to loop ${currentLoop + 1} at frame ${outputFrame}`);
-            }
 
             // Apply timeline automation if available
             if (Timeline.tracks.length > 0) {
@@ -2827,17 +2795,10 @@ async function convertToBinWithTimeline() {
             }
 
             // Calculate video position (with looping if timeline is longer than video)
-            const trimmedVideoDuration = Math.max(trimEnd - trimStart, 0.1);
-
-            // Ensure we have a valid video duration to work with
-            if (trimmedVideoDuration <= 0.1 || !isFinite(trimmedVideoDuration)) {
-                console.error('Invalid trimmed video duration:', trimmedVideoDuration);
-                throw new Error('Invalid video trim settings');
-            }
+            // (trimmedVideoDuration is already declared at the function level)
 
             // Ensure video position calculation won't fail
             if (!isFinite(timelineTime) || timelineTime < 0) {
-                console.error('Invalid timeline time:', timelineTime);
                 continue;
             }
 
@@ -2847,39 +2808,38 @@ async function convertToBinWithTimeline() {
             // Check if we're already at the target position
             if (Math.abs(video.currentTime - videoTime) < 0.01) {
                 // Already at the correct position, no need to seek
-                if (outputFrame % 10 === 0) {
-                    console.log(`Already at position ${videoTime.toFixed(2)}s, skipping seek`);
-                }
             } else {
-                const seekStartTime = performance.now();
-                console.log(`🎯 Seeking from ${video.currentTime.toFixed(2)}s to ${videoTime.toFixed(2)}s (frame ${outputFrame})`);
-
                 video.currentTime = videoTime;
 
                 // Add timeout for seeking with better error handling
                 try {
                     await new Promise((resolve, reject) => {
                         const timeout = setTimeout(() => {
-                            console.error(`⚠️ Seek timeout at frame ${outputFrame}, time ${videoTime}`);
                             // Don't reject, just continue with current frame
                             resolve();
                         }, 2000); // 2 second timeout
 
-                        video.onseeked = () => {
+                        video.onseeked = async () => {
                             clearTimeout(timeout);
-                            const seekDuration = performance.now() - seekStartTime;
-                            console.log(`✅ Seek completed in ${seekDuration.toFixed(0)}ms to ${video.currentTime.toFixed(2)}s`);
-                            resolve();
+
+                            // Wait for video to be ready
+                            if (video.readyState < 2) {
+                                await new Promise(r => {
+                                    video.oncanplay = r;
+                                    setTimeout(r, 100); // Timeout fallback
+                                });
+                            }
+
+                            // Add a small delay to ensure frame is rendered
+                            setTimeout(resolve, 50);
                         };
 
                         video.onerror = () => {
                             clearTimeout(timeout);
-                            console.error('Video error during seek, continuing anyway');
                             resolve(); // Continue instead of rejecting
                         };
                     });
                 } catch (seekError) {
-                    console.error('Seek failed, using current frame:', seekError);
                     // Continue with export even if seek failed
                 }
             }
@@ -2908,6 +2868,8 @@ async function convertToBinWithTimeline() {
             progressText.textContent = `${progress}%`;
 
             lastSuccessfulFrame = outputFrame;
+
+
         }
 
         // If ping pong mode is enabled and timeline matches video duration, add frames in reverse order
@@ -2948,13 +2910,7 @@ async function convertToBinWithTimeline() {
             }
         }
 
-        console.log(`✅ Export loop completed:`, {
-            framesProcessed: currentFrame,
-            expectedFrames: totalExportFrames,
-            bufferOffset: binOffset,
-            expectedBufferSize: totalFrames * FRAME_SIZE,
-            actualDataSize: binOffset
-        });
+
 
         // Create and download the binary file
         const blob = new Blob([binData.slice(0, binOffset)], { type: 'application/octet-stream' });
@@ -2993,6 +2949,12 @@ async function convertToBinWithTimeline() {
 
 // Override the original convertToBin function
 convertToBin = convertToBinWithTimeline;
+
+// Update the button to use the new function
+const downloadBtn = document.getElementById('downloadBinButton');
+if (downloadBtn) {
+    downloadBtn.onclick = convertToBinWithTimeline;
+}
 
 // Initialize timeline when DOM is loaded
 initializeTimeline();
