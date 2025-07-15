@@ -1746,6 +1746,16 @@ document.getElementById('vignetteEnabled').onchange = (event) => {
     updateControls();
 };
 
+// Initialize vignette control visibility on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const vignetteCheckbox = document.getElementById('vignetteEnabled');
+    const vignetteControl = document.querySelector('.vignette-control');
+
+    // Set initial state based on checkbox
+    vignetteEnabled = vignetteCheckbox.checked;
+    vignetteControl.classList.toggle('active', vignetteEnabled);
+});
+
 // Set up vignette synchronized slider
 addSliderInputSync('vignetteRadius', 'vignetteRadiusInput',
     (value) => { vignetteRadius = value; },
