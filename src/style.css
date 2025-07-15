@@ -709,6 +709,19 @@ input[type="file"]::-webkit-file-upload-button {
     color: #4a90e2;
 }
 
+.vignette-control {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0;
+    background: #333;
+    border-radius: 4px;
+}
+
+.vignette-control.active {
+    display: flex;
+}
+
 /* Add new slider row styles */
 .slider-row {
     display: flex;
