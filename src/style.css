@@ -1009,6 +1009,11 @@ input[type="file"]::-webkit-file-upload-button {
     font-weight: bold;
 }
 
+.timeline-time-marker.end-marker {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
 .timeline-tracks-wrapper {
     display: flex;
 }
@@ -1064,6 +1069,12 @@ input[type="file"]::-webkit-file-upload-button {
     flex: 1;
     position: relative;
     height: 100%;
+    min-height: 40px;
+    cursor: crosshair;
+}
+
+.track-content:hover {
+    background: rgba(74, 144, 226, 0.1);
 }
 
 .keyframe {
@@ -1083,6 +1094,7 @@ input[type="file"]::-webkit-file-upload-button {
     background: #5aa3f0;
     width: 14px;
     height: 14px;
+    box-shadow: 0 0 8px rgba(74, 144, 226, 0.6);
 }
 
 .keyframe.selected {
@@ -1118,6 +1130,7 @@ input[type="file"]::-webkit-file-upload-button {
     background: #ff6b6b;
     z-index: 20;
     pointer-events: none;
+    /* Line itself doesn't block interactions */
     margin-top: 30px;
     /* Account for ruler height */
 }
@@ -1132,6 +1145,78 @@ input[type="file"]::-webkit-file-upload-button {
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
     border-top: 8px solid #ff6b6b;
+    pointer-events: none;
+}
+
+.timeline-playhead-handle {
+    position: absolute;
+    top: -10px;
+    left: -8px;
+    width: 16px;
+    height: 20px;
+    background: transparent;
+    cursor: grab;
+    z-index: 21;
+    pointer-events: auto;
+}
+
+.timeline-playhead-handle:active {
+    cursor: grabbing;
+}
+
+/* Keyframe tooltip */
+.keyframe-tooltip {
+    position: absolute;
+    background: #2a2a2a;
+    border: 1px solid #4a90e2;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #e0e0e0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    display: none;
+    pointer-events: none;
+    max-width: 200px;
+    min-width: 120px;
+}
+
+.tooltip-parameter {
+    font-weight: bold;
+    color: #4a90e2;
+    margin-bottom: 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tooltip-value {
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.tooltip-time {
+    font-size: 11px;
+    color: #aaa;
+    margin-bottom: 2px;
+}
+
+.tooltip-easing {
+    font-size: 10px;
+    color: #888;
+    font-style: italic;
+}
+
+.timeline-end-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e74c3c;
+    z-index: 10;
+    opacity: 0.8;
 }
 
 .timeline-loop-marker {
