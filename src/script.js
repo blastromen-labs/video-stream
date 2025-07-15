@@ -1746,6 +1746,16 @@ document.getElementById('vignetteEnabled').onchange = (event) => {
     updateControls();
 };
 
+// Initialize vignette control visibility on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const vignetteCheckbox = document.getElementById('vignetteEnabled');
+    const vignetteControl = document.querySelector('.vignette-control');
+
+    // Set initial state based on checkbox
+    vignetteEnabled = vignetteCheckbox.checked;
+    vignetteControl.classList.toggle('active', vignetteEnabled);
+});
+
 // Set up vignette synchronized slider
 addSliderInputSync('vignetteRadius', 'vignetteRadiusInput',
     (value) => { vignetteRadius = value; },
@@ -2174,9 +2184,11 @@ function initializeTimeline() {
         }
     });
 
-    // Click on timeline to seek
+    // Click on timeline ruler to seek (not on tracks - tracks are for keyframe creation)
     document.getElementById('timelineRuler').addEventListener('click', handleTimelineClick);
-    document.getElementById('timelineTracks').addEventListener('click', handleTimelineClick);
+
+    // Make playhead draggable
+    setupPlayheadDrag();
 
     // Synchronized scrolling between headers and tracks
     const scrollableContainer = document.querySelector('.timeline-scrollable');
@@ -2321,6 +2333,12 @@ function renderTimeline() {
             tracksContainer.appendChild(loopMarker);
         }
     }
+
+    // Re-add end line marker after clearing tracks
+    const endLineMarker = document.createElement('div');
+    endLineMarker.className = 'timeline-end-line';
+    endLineMarker.style.left = `${Timeline.duration * Timeline.pixelsPerSecond}px`;
+    tracksContainer.appendChild(endLineMarker);
 }
 
 // Create track header and content elements separately
@@ -2342,6 +2360,7 @@ function createTrackElements(track, index) {
     const content = document.createElement('div');
     content.className = 'track-content';
     content.dataset.trackId = track.id;
+    content.style.minHeight = '40px'; // Ensure content has clickable area
     content.addEventListener('dblclick', (e) => handleTrackDoubleClick(e, track));
 
     // Render keyframes
@@ -2368,11 +2387,107 @@ function createKeyframeElement(keyframe, track) {
     el.dataset.keyframeId = keyframe.id;
     el.dataset.trackId = track.id;
     el.style.left = `${keyframe.time * Timeline.pixelsPerSecond}px`;
+    el.title = 'Hover for details, double-click to edit, drag to move';
 
     el.addEventListener('mousedown', startDragKeyframe);
     el.addEventListener('contextmenu', showKeyframeContextMenu);
+    el.addEventListener('dblclick', (e) => handleKeyframeDoubleClick(e, keyframe, track));
+    el.addEventListener('mouseenter', (e) => showKeyframeTooltip(e, keyframe, track));
+    el.addEventListener('mouseleave', hideKeyframeTooltip);
 
     return el;
+}
+
+// Keyframe tooltip functionality
+function showKeyframeTooltip(e, keyframe, track) {
+    const tooltip = getOrCreateTooltip();
+    const param = AUTOMATABLE_PARAMETERS[track.parameter];
+
+    // Format the value based on parameter type
+    let formattedValue;
+    if (param.scale === 100) {
+        // Percentage values (like contrast, zoom)
+        formattedValue = `${(keyframe.value * 100).toFixed(1)}%`;
+    } else if (param.scale === 1) {
+        // Integer values (like brightness, hue shift)
+        formattedValue = Number.isInteger(keyframe.value) ?
+            keyframe.value.toString() :
+            keyframe.value.toFixed(1);
+    } else {
+        // Decimal values
+        formattedValue = keyframe.value.toFixed(2);
+    }
+
+    // Add unit suffix for specific parameters
+    if (track.parameter === 'hueShift') {
+        formattedValue += '°';
+    } else if (track.parameter.includes('Threshold') || track.parameter.includes('Levels')) {
+        // No unit needed for these
+    } else if (track.parameter.includes('Time')) {
+        formattedValue += 's';
+    }
+
+    const parameterName = track.parameter.charAt(0).toUpperCase() +
+        track.parameter.slice(1).replace(/([A-Z])/g, ' $1');
+
+    tooltip.innerHTML = `
+        <div class="tooltip-parameter">${parameterName}</div>
+        <div class="tooltip-value">${formattedValue}</div>
+        <div class="tooltip-time">${keyframe.time.toFixed(1)}s</div>
+        <div class="tooltip-easing">${keyframe.easing}</div>
+    `;
+
+    // Position tooltip near the keyframe
+    const rect = e.target.getBoundingClientRect();
+    const scrollableContainer = document.querySelector('.timeline-scrollable');
+
+    // Calculate position relative to viewport
+    let left = rect.left + 15;
+    let top = rect.top - 10;
+
+    // Adjust if tooltip would go off-screen
+    const tooltipRect = { width: 200, height: 80 }; // estimated tooltip size
+    if (left + tooltipRect.width > window.innerWidth) {
+        left = rect.left - tooltipRect.width - 5; // Position to the left instead
+    }
+    if (top < 0) {
+        top = rect.bottom + 5; // Position below instead
+    }
+
+    tooltip.style.left = `${left + window.scrollX}px`;
+    tooltip.style.top = `${top + window.scrollY}px`;
+    tooltip.style.display = 'block';
+}
+
+function hideKeyframeTooltip() {
+    const tooltip = document.getElementById('keyframeTooltip');
+    if (tooltip) {
+        tooltip.style.display = 'none';
+    }
+}
+
+function getOrCreateTooltip() {
+    let tooltip = document.getElementById('keyframeTooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'keyframeTooltip';
+        tooltip.className = 'keyframe-tooltip';
+        document.body.appendChild(tooltip);
+    }
+    return tooltip;
+}
+
+// Handle keyframe double-click to edit
+function handleKeyframeDoubleClick(e, keyframe, track) {
+    e.preventDefault();
+    // Note: No need for stopPropagation since track handler now checks for keyframe target
+
+    // Set selected keyframe and track
+    Timeline.selectedKeyframe = keyframe;
+    Timeline.selectedTrack = track;
+
+    // Open the keyframe editor
+    openKeyframeEditor();
 }
 
 // Create automation curve visualization
@@ -2427,8 +2542,15 @@ function generateCurvePath(track) {
 
 // Handle track double-click to add keyframe
 function handleTrackDoubleClick(e, track) {
+    // Only add keyframe if we didn't double-click on an existing keyframe
+    if (e.target.classList.contains('keyframe')) {
+        return; // Let the keyframe double-click handler take care of this
+    }
+
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const scrollableContainer = document.querySelector('.timeline-scrollable');
+    const scrollLeft = scrollableContainer ? scrollableContainer.scrollLeft : 0;
+    const x = (e.clientX - rect.left) + scrollLeft;
     const time = x / Timeline.pixelsPerSecond;
 
     if (time >= 0 && time <= Timeline.duration) {
@@ -2444,17 +2566,54 @@ let draggedKeyframe = null;
 let draggedTrack = null;
 
 function startDragKeyframe(e) {
-    e.preventDefault();
-    isDraggingKeyframe = true;
-    draggedKeyframe = e.target;
-    const keyframeId = draggedKeyframe.dataset.keyframeId;
-    const trackId = draggedKeyframe.dataset.trackId;
+    // Don't prevent default immediately to allow double-click detection
+    // e.preventDefault();
 
-    draggedTrack = Timeline.tracks.find(t => t.id === parseFloat(trackId));
-    Timeline.selectedKeyframe = draggedTrack.keyframes.find(k => k.id === parseFloat(keyframeId));
+    const keyframeElement = e.target;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let hasMoved = false;
 
-    document.addEventListener('mousemove', dragKeyframe);
-    document.addEventListener('mouseup', stopDragKeyframe);
+    function onMouseMove(moveEvent) {
+        const deltaX = Math.abs(moveEvent.clientX - startX);
+        const deltaY = Math.abs(moveEvent.clientY - startY);
+
+        // Only start dragging if mouse has moved significantly
+        if (!hasMoved && (deltaX > 3 || deltaY > 3)) {
+            hasMoved = true;
+
+            // Now we're actually dragging, prevent default and start drag
+            isDraggingKeyframe = true;
+            draggedKeyframe = keyframeElement;
+            const keyframeId = draggedKeyframe.dataset.keyframeId;
+            const trackId = draggedKeyframe.dataset.trackId;
+
+            draggedTrack = Timeline.tracks.find(t => t.id === parseFloat(trackId));
+            Timeline.selectedKeyframe = draggedTrack.keyframes.find(k => k.id === parseFloat(keyframeId));
+
+            // Hide tooltip during drag
+            hideKeyframeTooltip();
+
+            // Add the actual drag handler
+            document.addEventListener('mousemove', dragKeyframe);
+        }
+
+        if (hasMoved) {
+            moveEvent.preventDefault();
+        }
+    }
+
+    function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        if (hasMoved) {
+            stopDragKeyframe();
+        }
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
 }
 
 function dragKeyframe(e) {
@@ -2561,7 +2720,14 @@ function updateTimelineRuler() {
 
     ruler.innerHTML = '';
     ruler.style.width = `${timelineWidth}px`;
+    tracks.style.width = `${timelineWidth}px`;
     tracks.style.minWidth = `${timelineWidth}px`;
+
+    // Ensure the scrollable container can access the full timeline width
+    const scrollableContainer = document.querySelector('.timeline-scrollable');
+    if (scrollableContainer) {
+        scrollableContainer.scrollWidth; // Force layout recalculation
+    }
 
     // Add time markers
     const markerInterval = Timeline.zoom < 1 ? 5 : Timeline.zoom < 2 ? 2 : 1;
@@ -2576,6 +2742,17 @@ function updateTimelineRuler() {
         ruler.appendChild(marker);
     }
 
+    // Add end marker if timeline duration doesn't align with regular markers
+    const endTime = Timeline.duration;
+    const lastRegularMarker = Math.floor(endTime / markerInterval) * markerInterval;
+    if (endTime > 0 && Math.abs(endTime - lastRegularMarker) > 0.1) {
+        const endMarker = document.createElement('div');
+        endMarker.className = 'timeline-time-marker end-marker';
+        endMarker.style.left = `${endTime * Timeline.pixelsPerSecond}px`;
+        endMarker.textContent = `${endTime}s`;
+        ruler.appendChild(endMarker);
+    }
+
     // Add video loop markers if timeline is longer than video
     const trimmedVideoDuration = trimEnd - trimStart;
     if (trimmedVideoDuration > 0 && Timeline.duration > trimmedVideoDuration) {
@@ -2585,11 +2762,16 @@ function updateTimelineRuler() {
             loopMarker.style.left = `${loop * trimmedVideoDuration * Timeline.pixelsPerSecond}px`;
             loopMarker.setAttribute('data-loop', `Loop ${loop + 1}`);
 
-            // Add to both ruler and tracks for full height
-            ruler.appendChild(loopMarker.cloneNode(true));
+            // Add to tracks only
             tracks.appendChild(loopMarker);
         }
     }
+
+    // Add end line marker in tracks area
+    const endLineMarker = document.createElement('div');
+    endLineMarker.className = 'timeline-end-line';
+    endLineMarker.style.left = `${Timeline.duration * Timeline.pixelsPerSecond}px`;
+    tracks.appendChild(endLineMarker);
 }
 
 // Playhead management
@@ -2765,9 +2947,12 @@ function syncSliderInputQuiet(sliderId, inputId, value, formatter = null) {
 // Handle timeline click to seek
 function handleTimelineClick(e) {
     if (e.target.classList.contains('keyframe')) return;
+    if (isDraggingPlayhead) return; // Don't handle clicks while dragging playhead
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const scrollableContainer = document.querySelector('.timeline-scrollable');
+    const scrollLeft = scrollableContainer ? scrollableContainer.scrollLeft : 0;
+    const x = (e.clientX - rect.left) + scrollLeft;
     const time = Math.max(0, Math.min(x / Timeline.pixelsPerSecond, Timeline.duration));
 
     // Update timeline position
@@ -2791,6 +2976,95 @@ function handleTimelineClick(e) {
 
     // Update visual playhead
     updatePlayhead();
+}
+
+// Timeline playhead dragging functionality
+let isDraggingPlayhead = false;
+let playheadDragStartX = 0;
+let playheadDragStartTime = 0;
+
+function setupPlayheadDrag() {
+    const playhead = document.getElementById('timelinePlayhead');
+
+    // Create draggable handle
+    const handle = document.createElement('div');
+    handle.className = 'timeline-playhead-handle';
+    handle.id = 'timelinePlayheadHandle';
+    playhead.appendChild(handle);
+
+    handle.addEventListener('mousedown', startPlayheadDrag);
+    document.addEventListener('mousemove', dragPlayhead);
+    document.addEventListener('mouseup', stopPlayheadDrag);
+}
+
+function startPlayheadDrag(e) {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent timeline click from firing
+
+    isDraggingPlayhead = true;
+    playheadDragStartX = e.clientX;
+    playheadDragStartTime = Timeline.playheadPosition;
+
+    // Pause video while dragging for smoother scrubbing
+    if (!video.paused) {
+        video.pause();
+        // Remember that we paused it for dragging
+        Timeline.wasPausedForDrag = false;
+    } else {
+        Timeline.wasPausedForDrag = true;
+    }
+}
+
+function dragPlayhead(e) {
+    if (!isDraggingPlayhead) return;
+
+    e.preventDefault();
+
+    // Calculate time change based on mouse movement
+    const deltaX = e.clientX - playheadDragStartX;
+    const deltaTime = deltaX / Timeline.pixelsPerSecond;
+    const newTime = Math.max(0, Math.min(playheadDragStartTime + deltaTime, Timeline.duration));
+
+    // Update timeline position
+    Timeline.playheadPosition = newTime;
+
+    // Calculate which video loop we're in and the position within that loop
+    const trimmedVideoDuration = trimEnd - trimStart;
+    Timeline.loopCount = Math.floor(newTime / trimmedVideoDuration);
+    const videoPosition = newTime % trimmedVideoDuration;
+
+    // Set video to appropriate position
+    const targetVideoTime = trimStart + videoPosition;
+    video.currentTime = Math.min(targetVideoTime, trimEnd);
+
+    // Update start time for animation loop
+    if (Timeline.startTime) {
+        Timeline.startTime = performance.now() - (newTime * 1000);
+        Timeline.totalPausedTime = 0;
+        Timeline.pausedAt = null;
+    }
+
+    // Update visual playhead position
+    const playhead = document.getElementById('timelinePlayhead');
+    playhead.style.left = `${Timeline.playheadPosition * Timeline.pixelsPerSecond}px`;
+
+    // Apply automation values at the current time
+    if (Timeline.tracks.length > 0) {
+        applyAutomationAtTime(Timeline.playheadPosition);
+    }
+}
+
+function stopPlayheadDrag(e) {
+    if (!isDraggingPlayhead) return;
+
+    isDraggingPlayhead = false;
+
+    // Resume video if it was playing before drag
+    if (!Timeline.wasPausedForDrag && shouldLoop) {
+        video.play();
+    }
+
+    Timeline.wasPausedForDrag = undefined;
 }
 
 // Remove track
