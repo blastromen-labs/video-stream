@@ -55,6 +55,8 @@ let pingPongMode = false;
 let isPlayingBackward = false;
 let pingPongPlaybackRate = 1;
 let playbackSpeed = 1.0;
+let vignetteEnabled = false;
+let vignetteRadius = 70;  // 0-100, where 100 is no vignette
 
 // Performance optimization variables
 let lastUpdateTime = 0;
@@ -215,7 +217,8 @@ const DEFAULT_VALUES = {
     'maskY': 0,
     'maskWidth': 25,
     'maskHeight': 25,
-    'playbackSpeed': 100   // 1.0x
+    'playbackSpeed': 100,  // 1.0x
+    'vignetteRadius': 70   // 70%
 };
 
 // Add double-click handlers to all sliders
@@ -319,6 +322,10 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                     playbackSpeed = DEFAULT_VALUES[id] / 100;
                     syncSliderInput('playbackSpeed', 'playbackSpeedInput', DEFAULT_VALUES[id]);
                     video.playbackRate = playbackSpeed;
+                    break;
+                case 'vignetteRadius':
+                    vignetteRadius = DEFAULT_VALUES[id];
+                    syncSliderInput('vignetteRadius', 'vignetteRadiusInput', DEFAULT_VALUES[id]);
                     break;
             }
             updateControls();
@@ -463,6 +470,7 @@ function processFrame(sourceCanvas, sourceCtx) {
     const hasColorReduction = colorLevels < 256;
     const hasColorSwap = colorSwapEnabled;
     const hasMask = maskEnabled;
+    const hasVignette = vignetteEnabled && vignetteRadius < 100;
     const targetRGB = hasColorize ? hexToRgb(colorizeColor) : null;
     const colorizeIntensity = hasColorize ? colorizeAmount / 100 : 0;
     const sourceRGB = hasColorSwap ? hexToRgb(colorSwapSource) : null;
@@ -477,6 +485,23 @@ function processFrame(sourceCanvas, sourceCtx) {
         maskTop = Math.floor((maskY / 100) * PANEL_HEIGHT);
         maskRight = Math.floor(maskLeft + (maskWidth / 100) * PANEL_WIDTH);
         maskBottom = Math.floor(maskTop + (maskHeight / 100) * PANEL_HEIGHT);
+    }
+
+    // Pre-calculate vignette boundaries based on video area
+    let vignetteLeft, vignetteTop, vignetteRight, vignetteBottom, vignetteCenterX, vignetteCenterY, vignetteMaxDistance;
+    if (hasVignette) {
+        const crop = calculateCrop(video.videoWidth, video.videoHeight);
+        vignetteLeft = crop.destX;
+        vignetteTop = crop.destY;
+        vignetteRight = crop.destX + crop.destWidth;
+        vignetteBottom = crop.destY + crop.destHeight;
+        vignetteCenterX = vignetteLeft + crop.destWidth / 2;
+        vignetteCenterY = vignetteTop + crop.destHeight / 2;
+
+        // Calculate max distance from center to corner of video area
+        const halfWidth = crop.destWidth / 2;
+        const halfHeight = crop.destHeight / 2;
+        vignetteMaxDistance = Math.sqrt(halfWidth * halfWidth + halfHeight * halfHeight);
     }
 
     for (let i = 0; i < data.length; i += 4) {
@@ -557,6 +582,47 @@ function processFrame(sourceCanvas, sourceCtx) {
                 rr = 0;
                 gg = 0;
                 bb = 0;
+            }
+        }
+
+        // Apply vignette effect (only within video area)
+        if (hasVignette) {
+            const pixelIndex = (i / 4);
+            const x = pixelIndex % PANEL_WIDTH;
+            const y = Math.floor(pixelIndex / PANEL_WIDTH);
+
+            // Only apply vignette to pixels within the video area
+            if (x >= vignetteLeft && x < vignetteRight && y >= vignetteTop && y < vignetteBottom) {
+                // Calculate distance from center of video area
+                const dx = x - vignetteCenterX;
+                const dy = y - vignetteCenterY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Normalize distance (0 = center, 1 = corner)
+                const normalizedDistance = distance / vignetteMaxDistance;
+
+                // Calculate vignette factor with very aggressive curve for LED panels
+                // vignetteRadius controls the size of the unaffected center area
+                const centerRadius = vignetteRadius / 100;
+
+                if (normalizedDistance > centerRadius) {
+                    // Create extremely steep curve for LED panels with low dynamic contrast
+                    const fadePosition = (normalizedDistance - centerRadius) / (1 - centerRadius);
+
+                    // Use ultra-aggressive curve specifically for LED panels
+                    // Power of 0.2 creates very steep falloff - most of the image stays bright until near edges
+                    const vignetteStrength = Math.pow(fadePosition, 0.2);
+
+                    // Additional aggressive scaling to ensure dramatic effect
+                    const scaledStrength = vignetteStrength * 1.2; // Amplify the effect
+
+                    // Apply ultra-strong vignette - guaranteed 100% black at corners
+                    const vignetteFactor = Math.max(0, 1 - scaledStrength);
+
+                    rr *= vignetteFactor;
+                    gg *= vignetteFactor;
+                    bb *= vignetteFactor;
+                }
             }
         }
 
@@ -1392,6 +1458,13 @@ function resetControls() {
     syncSliderInput('playbackSpeed', 'playbackSpeedInput', 100);
     video.playbackRate = playbackSpeed;
 
+    // Reset vignette controls
+    vignetteEnabled = false;
+    vignetteRadius = 70;
+    document.getElementById('vignetteEnabled').checked = false;
+    syncSliderInput('vignetteRadius', 'vignetteRadiusInput', 70);
+    document.querySelector('.vignette-control').classList.remove('active');
+
     // Reset all sliders and their input fields
     syncSliderInput('contrast', 'contrastInput', 100);
     syncSliderInput('brightness', 'brightnessInput', 0);
@@ -1499,6 +1572,14 @@ function randomizeControls() {
 
     colorSwapThreshold = getRandomInt(10, 50);
     syncSliderInput('colorSwapThreshold', 'colorSwapThresholdInput', colorSwapThreshold);
+
+    // Random vignette values
+    vignetteEnabled = Math.random() < 0.5;
+    document.getElementById('vignetteEnabled').checked = vignetteEnabled;
+    document.querySelector('.vignette-control').classList.toggle('active', vignetteEnabled);
+
+    vignetteRadius = getRandomInt(30, 90);
+    syncSliderInput('vignetteRadius', 'vignetteRadiusInput', vignetteRadius);
 }
 
 // Add the random button event listener
@@ -1654,6 +1735,20 @@ addSliderInputSync('maskWidth', 'maskWidthInput',
 
 addSliderInputSync('maskHeight', 'maskHeightInput',
     (value) => { maskHeight = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
+
+// Add vignette event listeners
+document.getElementById('vignetteEnabled').onchange = (event) => {
+    vignetteEnabled = event.target.checked;
+    document.querySelector('.vignette-control').classList.toggle('active', vignetteEnabled);
+    updateControls();
+};
+
+// Set up vignette synchronized slider
+addSliderInputSync('vignetteRadius', 'vignetteRadiusInput',
+    (value) => { vignetteRadius = value; },
     (value) => Math.round(value),
     (value) => parseInt(value)
 );
@@ -1826,7 +1921,8 @@ const AUTOMATABLE_PARAMETERS = {
     'maskX': { min: -100, max: 100, default: 0, scale: 1 },
     'maskY': { min: -100, max: 100, default: 0, scale: 1 },
     'maskWidth': { min: 0, max: 100, default: 25, scale: 1 },
-    'maskHeight': { min: 0, max: 100, default: 25, scale: 1 }
+    'maskHeight': { min: 0, max: 100, default: 25, scale: 1 },
+    'vignetteRadius': { min: 0, max: 100, default: 70, scale: 1 }
 };
 
 // Track class
@@ -2193,7 +2289,8 @@ function getCurrentParameterValue(parameter) {
         'maskX': maskX,
         'maskY': maskY,
         'maskWidth': maskWidth,
-        'maskHeight': maskHeight
+        'maskHeight': maskHeight,
+        'vignetteRadius': vignetteRadius
     };
 
     return params[parameter] || AUTOMATABLE_PARAMETERS[parameter].default;
@@ -2634,6 +2731,10 @@ function setParameterValue(parameter, value) {
         case 'maskHeight':
             maskHeight = value;
             syncSliderInputQuiet('maskHeight', 'maskHeightInput', value);
+            break;
+        case 'vignetteRadius':
+            vignetteRadius = value;
+            syncSliderInputQuiet('vignetteRadius', 'vignetteRadiusInput', value);
             break;
     }
 }
