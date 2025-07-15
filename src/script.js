@@ -1826,6 +1826,11 @@ function calculateCrop(videoWidth, videoHeight) {
         destHeight = sourceHeight * displayScale;
         destX = (PANEL_WIDTH - destWidth) / 2;
         destY = (PANEL_HEIGHT - destHeight) / 2;
+
+        // Apply offsets to destination when zoomed out
+        // This moves the image within the panel
+        destX += (xOffset / 100) * PANEL_WIDTH * 0.5;
+        destY += (yOffset / 100) * PANEL_HEIGHT * 0.5;
     }
 
     // Center the source area in the video
@@ -1833,14 +1838,43 @@ function calculateCrop(videoWidth, videoHeight) {
     sourceY = (videoHeight - sourceHeight) / 2;
 
     // Apply user pan offsets
-    sourceX += (xOffset / 100 * (videoWidth - sourceWidth));
-    sourceY += (yOffset / 100 * (videoHeight - sourceHeight));
+    if (zoom > 1.0) {
+        // Zoomed in - pan within the video source
+        sourceX += (xOffset / 100 * (videoWidth - sourceWidth));
+        sourceY += (yOffset / 100 * (videoHeight - sourceHeight));
+    } else if (zoom === 1.0) {
+        // At exactly 100% zoom - use hybrid approach
+        // Apply small source offset if possible
+        const xPanRange = videoWidth - sourceWidth;
+        const yPanRange = videoHeight - sourceHeight;
+
+        if (xPanRange > 1) {
+            sourceX += (xOffset / 100 * xPanRange);
+        } else {
+            // No room to pan in source, use destination offset
+            destX += (xOffset / 100) * PANEL_WIDTH * 0.3;
+        }
+
+        if (yPanRange > 1) {
+            sourceY += (yOffset / 100 * yPanRange);
+        } else {
+            // No room to pan in source, use destination offset
+            destY += (yOffset / 100) * PANEL_HEIGHT * 0.3;
+        }
+    }
+    // For zoom < 1.0, offsets are already applied to destination above
 
     // Ensure source stays within video bounds
     sourceX = Math.max(0, Math.min(sourceX, videoWidth - sourceWidth));
     sourceY = Math.max(0, Math.min(sourceY, videoHeight - sourceHeight));
     sourceWidth = Math.min(sourceWidth, videoWidth - sourceX);
     sourceHeight = Math.min(sourceHeight, videoHeight - sourceY);
+
+    // Clamp destination coordinates to prevent image from going completely off-screen
+    // But allow partial off-screen positioning for panning effect
+    const maxDestOffset = PANEL_WIDTH * 0.8; // Allow up to 80% off-screen
+    destX = Math.max(-destWidth + PANEL_WIDTH * 0.2, Math.min(destX, PANEL_WIDTH * 0.8));
+    destY = Math.max(-destHeight + PANEL_HEIGHT * 0.2, Math.min(destY, PANEL_HEIGHT * 0.8));
 
     return {
         sourceX,
