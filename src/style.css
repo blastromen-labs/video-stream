@@ -516,6 +516,38 @@ input[type="file"]::-webkit-file-upload-button {
     font-size: 13px;
 }
 
+.color-saturation-control {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.color-saturation-control.active {
+    display: flex;
+}
+
+.color-saturation-control input[type="color"] {
+    width: 100%;
+    height: 40px;
+    padding: 2px;
+    background: #3a3a3a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.color-saturation-control label {
+    margin: 5px 0;
+    font-size: 13px;
+}
+
+.color-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 .offset-control {
     display: flex;
     flex-direction: column;

@@ -135,6 +135,46 @@
                         </div>
                     </div>
                     <div class="control-group">
+                        <div class="slider-row">
+                            <label for="saturation">Saturation</label>
+                            <input type="range" id="saturation" min="0" max="200" value="100" step="1">
+                            <input type="number" id="saturationInput" min="0" max="200" value="100" step="1"
+                                class="value-input">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="colorSaturationEnabled">
+                            Color-Specific Saturation
+                        </label>
+                        <div class="color-saturation-control">
+                            <div class="color-selector">
+                                <label>Target Color:</label>
+                                <input type="color" id="targetSaturationColor" value="#ff0000">
+                                <div class="slider-row">
+                                    <label for="colorSaturationThreshold">Color Range</label>
+                                    <input type="range" id="colorSaturationThreshold" min="0" max="180" value="30"
+                                        step="1">
+                                    <input type="number" id="colorSaturationThresholdInput" min="0" max="180" value="30"
+                                        step="1" class="value-input">
+                                </div>
+                                <div class="slider-row">
+                                    <label for="colorSpecificSaturation">Saturation</label>
+                                    <input type="range" id="colorSpecificSaturation" min="0" max="300" value="100"
+                                        step="1">
+                                    <input type="number" id="colorSpecificSaturationInput" min="0" max="300" value="100"
+                                        step="1" class="value-input">
+                                </div>
+                                <div class="slider-row">
+                                    <label for="otherColorsSaturation">Other Colors</label>
+                                    <input type="range" id="otherColorsSaturation" min="0" max="100" value="0" step="1">
+                                    <input type="number" id="otherColorsSaturationInput" min="0" max="100" value="0"
+                                        step="1" class="value-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-group">
                         <label>Colorize Effect</label>
                         <div class="colorize-control">
                             <input type="color" id="colorizeColor" value="#4a90e2">

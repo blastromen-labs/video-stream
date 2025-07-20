@@ -24,6 +24,12 @@ let redChannel = 1.0;
 let greenChannel = 1.0;
 let blueChannel = 1.0;
 let hueShift = 0; // -180 to 180 degrees
+let saturation = 1.0; // 0 to 2.0 (0% to 200%)
+let colorSaturationEnabled = false;
+let targetSaturationColor = '#ff0000';
+let colorSaturationThreshold = 30; // Hue tolerance in degrees
+let colorSpecificSaturation = 1.0; // 0 to 3.0 (0% to 300%)
+let otherColorsSaturation = 0; // 0 to 1.0 (0% to 100%)
 let isConnected = false;
 let trimStart = 0;
 let trimEnd = 0;
@@ -204,6 +210,10 @@ const DEFAULT_VALUES = {
     'green': 100,          // 100%
     'blue': 100,           // 100%
     'hueShift': 0,         // 0 degrees
+    'saturation': 100,     // 100%
+    'colorSaturationThreshold': 30,  // 30 degrees
+    'colorSpecificSaturation': 100,  // 100%
+    'otherColorsSaturation': 0,      // 0%
     'zoom': 100,           // 100%
     'xOffset': 0,
     'yOffset': 0,
@@ -265,6 +275,22 @@ Object.keys(DEFAULT_VALUES).forEach(id => {
                 case 'hueShift':
                     hueShift = DEFAULT_VALUES[id];
                     syncSliderInput('hueShift', 'hueShiftInput', DEFAULT_VALUES[id]);
+                    break;
+                case 'saturation':
+                    saturation = DEFAULT_VALUES[id] / 100;
+                    syncSliderInput('saturation', 'saturationInput', DEFAULT_VALUES[id]);
+                    break;
+                case 'colorSaturationThreshold':
+                    colorSaturationThreshold = DEFAULT_VALUES[id];
+                    syncSliderInput('colorSaturationThreshold', 'colorSaturationThresholdInput', DEFAULT_VALUES[id]);
+                    break;
+                case 'colorSpecificSaturation':
+                    colorSpecificSaturation = DEFAULT_VALUES[id] / 100;
+                    syncSliderInput('colorSpecificSaturation', 'colorSpecificSaturationInput', DEFAULT_VALUES[id]);
+                    break;
+                case 'otherColorsSaturation':
+                    otherColorsSaturation = DEFAULT_VALUES[id] / 100;
+                    syncSliderInput('otherColorsSaturation', 'otherColorsSaturationInput', DEFAULT_VALUES[id]);
                     break;
                 case 'zoom':
                     zoom = DEFAULT_VALUES[id] / 100;
@@ -510,13 +536,46 @@ function processFrame(sourceCanvas, sourceCtx) {
         let gg = adjustPixel(data[i + 1], contrast, brightness, greenChannel);
         let bb = adjustPixel(data[i + 2], contrast, brightness, blueChannel);
 
-        // Apply hue shift if enabled (expensive operation)
-        if (hasHueShift) {
+        // Apply hue shift and saturation if needed
+        if (hasHueShift || saturation !== 1.0 || colorSaturationEnabled) {
             const [h, s, l] = rgbToHsl(rr, gg, bb);
-            let newHue = h + hueShift;
-            if (newHue < 0) newHue += 360;
-            if (newHue >= 360) newHue -= 360;
-            const [newR, newG, newB] = hslToRgb(newHue, s, l);
+            let newHue = h;
+            let newSat = s;
+
+            // Apply hue shift
+            if (hasHueShift) {
+                newHue = h + hueShift;
+                if (newHue < 0) newHue += 360;
+                if (newHue >= 360) newHue -= 360;
+            }
+
+            // Apply global saturation
+            newSat = s * saturation;
+
+            // Apply color-specific saturation
+            if (colorSaturationEnabled) {
+                const targetRGB = hexToRgb(targetSaturationColor);
+                const [targetH, targetS, targetL] = rgbToHsl(targetRGB[0], targetRGB[1], targetRGB[2]);
+
+                // Calculate hue difference
+                let hueDiff = Math.abs(h - targetH);
+                if (hueDiff > 180) hueDiff = 360 - hueDiff;
+
+                // If within threshold, apply specific saturation
+                if (hueDiff <= colorSaturationThreshold) {
+                    // Blend between specific saturation and other colors saturation based on distance
+                    const blendFactor = 1 - (hueDiff / colorSaturationThreshold);
+                    newSat = s * (colorSpecificSaturation * blendFactor + otherColorsSaturation * (1 - blendFactor));
+                } else {
+                    // Apply other colors saturation
+                    newSat = s * otherColorsSaturation;
+                }
+            }
+
+            // Clamp saturation
+            newSat = Math.max(0, Math.min(1, newSat));
+
+            const [newR, newG, newB] = hslToRgb(newHue, newSat, l);
             rr = newR;
             gg = newG;
             bb = newB;
@@ -1195,6 +1254,42 @@ addSliderInputSync('hueShift', 'hueShiftInput',
     (value) => parseInt(value)
 );
 
+addSliderInputSync('saturation', 'saturationInput',
+    (value) => { saturation = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
+
+// Color-specific saturation controls
+document.getElementById('colorSaturationEnabled').onchange = (event) => {
+    colorSaturationEnabled = event.target.checked;
+    document.querySelector('.color-saturation-control').classList.toggle('active', colorSaturationEnabled);
+    updateControls();
+};
+
+document.getElementById('targetSaturationColor').onchange = (event) => {
+    targetSaturationColor = event.target.value;
+    updateControls();
+};
+
+addSliderInputSync('colorSaturationThreshold', 'colorSaturationThresholdInput',
+    (value) => { colorSaturationThreshold = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
+
+addSliderInputSync('colorSpecificSaturation', 'colorSpecificSaturationInput',
+    (value) => { colorSpecificSaturation = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
+
+addSliderInputSync('otherColorsSaturation', 'otherColorsSaturationInput',
+    (value) => { otherColorsSaturation = value / 100; },
+    (value) => Math.round(value),
+    (value) => parseFloat(value)
+);
+
 // Add this function to update trim controls
 function updateTrimControls() {
     const duration = video.duration || 0;
@@ -1404,6 +1499,12 @@ function resetControls() {
     greenChannel = 1.0;
     blueChannel = 1.0;
     hueShift = 0;
+    saturation = 1.0;
+    colorSaturationEnabled = false;
+    targetSaturationColor = '#ff0000';
+    colorSaturationThreshold = 30;
+    colorSpecificSaturation = 1.0;
+    otherColorsSaturation = 0;
     zoom = 1.0;
     xOffset = 0;
     yOffset = 0;
@@ -1475,6 +1576,13 @@ function resetControls() {
     syncSliderInput('green', 'greenInput', 100);
     syncSliderInput('blue', 'blueInput', 100);
     syncSliderInput('hueShift', 'hueShiftInput', 0);
+    syncSliderInput('saturation', 'saturationInput', 100);
+    syncSliderInput('colorSaturationThreshold', 'colorSaturationThresholdInput', 30);
+    syncSliderInput('colorSpecificSaturation', 'colorSpecificSaturationInput', 100);
+    syncSliderInput('otherColorsSaturation', 'otherColorsSaturationInput', 0);
+    document.getElementById('colorSaturationEnabled').checked = false;
+    document.getElementById('targetSaturationColor').value = '#ff0000';
+    document.querySelector('.color-saturation-control').classList.remove('active');
     syncSliderInput('zoom', 'zoomInput', 100);
     syncSliderInput('xOffset', 'xOffsetInput', 0);
     syncSliderInput('yOffset', 'yOffsetInput', 0);
@@ -1507,6 +1615,15 @@ function randomizeControls() {
     greenChannel = (getRandomInt(50, 150) / 100); // 0.5 to 1.5
     blueChannel = (getRandomInt(50, 150) / 100);  // 0.5 to 1.5
     hueShift = getRandomInt(-180, 180);           // -180 to 180 degrees
+    saturation = getRandomInt(0, 200) / 100;      // 0% to 200%
+    colorSaturationEnabled = Math.random() < 0.3;  // 30% chance
+    document.getElementById('colorSaturationEnabled').checked = colorSaturationEnabled;
+    document.querySelector('.color-saturation-control').classList.toggle('active', colorSaturationEnabled);
+    targetSaturationColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+    document.getElementById('targetSaturationColor').value = targetSaturationColor;
+    colorSaturationThreshold = getRandomInt(10, 60);
+    colorSpecificSaturation = getRandomInt(100, 300) / 100;  // 100% to 300%
+    otherColorsSaturation = getRandomInt(0, 50) / 100;       // 0% to 50%
     zoom = getRandomInt(50, 200) / 100;          // 50% to 200%
     colorizeAmount = getRandomInt(0, 100);
     colorLevels = Math.pow(2, getRandomInt(2, 8)); // 4 to 256 colors in power of 2 steps
@@ -1533,6 +1650,10 @@ function randomizeControls() {
     syncSliderInput('green', 'greenInput', greenChannel * 100);
     syncSliderInput('blue', 'blueInput', blueChannel * 100);
     syncSliderInput('hueShift', 'hueShiftInput', hueShift);
+    syncSliderInput('saturation', 'saturationInput', saturation * 100);
+    syncSliderInput('colorSaturationThreshold', 'colorSaturationThresholdInput', colorSaturationThreshold);
+    syncSliderInput('colorSpecificSaturation', 'colorSpecificSaturationInput', colorSpecificSaturation * 100);
+    syncSliderInput('otherColorsSaturation', 'otherColorsSaturationInput', otherColorsSaturation * 100);
     syncSliderInput('zoom', 'zoomInput', zoom * 100);
     syncSliderInput('colorizeAmount', 'colorizeAmountInput', colorizeAmount);
     syncSliderInput('colorLevels', 'colorLevelsInput', colorLevels);
@@ -1952,6 +2073,10 @@ const AUTOMATABLE_PARAMETERS = {
     'green': { min: 0, max: 2, default: 1, scale: 100 },
     'blue': { min: 0, max: 2, default: 1, scale: 100 },
     'hueShift': { min: -180, max: 180, default: 0, scale: 1 },
+    'saturation': { min: 0, max: 2, default: 1, scale: 100 },
+    'colorSaturationThreshold': { min: 0, max: 180, default: 30, scale: 1 },
+    'colorSpecificSaturation': { min: 0, max: 3, default: 1, scale: 100 },
+    'otherColorsSaturation': { min: 0, max: 1, default: 0, scale: 100 },
     'zoom': { min: 0.25, max: 4, default: 1, scale: 100 },
     'xOffset': { min: -100, max: 100, default: 0, scale: 1 },
     'yOffset': { min: -100, max: 100, default: 0, scale: 1 },
@@ -2322,6 +2447,10 @@ function getCurrentParameterValue(parameter) {
         'green': greenChannel,
         'blue': blueChannel,
         'hueShift': hueShift,
+        'saturation': saturation,
+        'colorSaturationThreshold': colorSaturationThreshold,
+        'colorSpecificSaturation': colorSpecificSaturation,
+        'otherColorsSaturation': otherColorsSaturation,
         'zoom': zoom,
         'xOffset': xOffset,
         'yOffset': yOffset,
@@ -2891,6 +3020,22 @@ function setParameterValue(parameter, value) {
         case 'hueShift':
             hueShift = value;
             syncSliderInputQuiet('hueShift', 'hueShiftInput', value);
+            break;
+        case 'saturation':
+            saturation = value;
+            syncSliderInputQuiet('saturation', 'saturationInput', value * param.scale);
+            break;
+        case 'colorSaturationThreshold':
+            colorSaturationThreshold = value;
+            syncSliderInputQuiet('colorSaturationThreshold', 'colorSaturationThresholdInput', value);
+            break;
+        case 'colorSpecificSaturation':
+            colorSpecificSaturation = value;
+            syncSliderInputQuiet('colorSpecificSaturation', 'colorSpecificSaturationInput', value * param.scale);
+            break;
+        case 'otherColorsSaturation':
+            otherColorsSaturation = value;
+            syncSliderInputQuiet('otherColorsSaturation', 'otherColorsSaturationInput', value * param.scale);
             break;
         case 'zoom':
             zoom = value;
