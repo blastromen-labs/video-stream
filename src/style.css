@@ -346,6 +346,11 @@ button:disabled {
     display: block;
 }
 
+#previewCanvas.three-panel-preview {
+    width: 720px;
+    height: 576px;
+}
+
 #processCanvas {
     display: none;
 }
@@ -591,6 +596,33 @@ input[type="file"]::-webkit-file-upload-button {
     flex-direction: column;
     gap: 5px;
     margin: 0px 0;
+}
+
+.three-panel-preview-control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #444;
+}
+
+.three-panel-spread-control {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    margin-left: 4px;
+}
+
+.three-panel-spread-control.active {
+    display: flex;
+}
+
+.three-panel-hint {
+    margin: 0;
+    color: #888;
+    font-size: 11px;
+    line-height: 1.4;
 }
 
 .offset-control label {

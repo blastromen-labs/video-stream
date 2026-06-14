@@ -1,5 +1,6 @@
 const PANEL_WIDTH = 40;
 const PANEL_HEIGHT = 96;
+const COMBINED_PANEL_WIDTH = PANEL_WIDTH * 3;
 const FRAME_SIZE = PANEL_WIDTH * PANEL_HEIGHT * 3;  // RGB
 const CHUNK_SIZE = 1024;
 const TARGET_FPS = 30;
@@ -69,6 +70,8 @@ let pingPongPlaybackRate = 1;
 let playbackSpeed = 1.0;
 let vignetteEnabled = false;
 let vignetteRadius = 70;  // 0-100, where 100 is no vignette
+let threePanelPreviewMode = false;
+let threePanelSpread = 30;  // X offset spread between L/M/R panels
 
 // Performance optimization variables
 let lastUpdateTime = 0;
@@ -90,12 +93,91 @@ const previewCtx = previewCanvas.getContext('2d', {
     alpha: false,
     desynchronized: true
 });
+const panelCanvas = document.createElement('canvas');
+const panelCtx = panelCanvas.getContext('2d', {
+    willReadFrequently: true,
+    alpha: false,
+    desynchronized: true
+});
 
 // Set up canvases with correct dimensions
 canvas.width = PANEL_WIDTH;
 canvas.height = PANEL_HEIGHT;
+panelCanvas.width = PANEL_WIDTH;
+panelCanvas.height = PANEL_HEIGHT;
 previewCanvas.width = PREVIEW_WIDTH;
 previewCanvas.height = PREVIEW_HEIGHT;
+
+function updatePreviewCanvasSize() {
+    const width = threePanelPreviewMode ? COMBINED_PANEL_WIDTH : PREVIEW_WIDTH;
+    previewCanvas.width = width;
+    previewCanvas.height = PREVIEW_HEIGHT;
+    previewCanvas.classList.toggle('three-panel-preview', threePanelPreviewMode);
+}
+
+function drawPanelCrop(crop, targetCanvas = panelCanvas, targetCtx = panelCtx) {
+    targetCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+
+    if (zoom < 1.0) {
+        targetCtx.fillStyle = 'black';
+        targetCtx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+    }
+
+    targetCtx.drawImage(
+        video,
+        crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
+        crop.destX, crop.destY, crop.destWidth, crop.destHeight
+    );
+
+    return processFrame(targetCanvas, targetCtx);
+}
+
+function getThreePanelXOffset(slot) {
+    if (slot === 'left') return xOffset - threePanelSpread;
+    if (slot === 'right') return xOffset + threePanelSpread;
+    return xOffset;
+}
+
+function renderPanelFrame(videoWidth, videoHeight, xOffsetOverride, targetCanvas = panelCanvas, targetCtx = panelCtx) {
+    const crop = calculateCrop(videoWidth, videoHeight, {
+        xOffset: xOffsetOverride
+    });
+    return drawPanelCrop(crop, targetCanvas, targetCtx);
+}
+
+function drawThreePanelPreview(videoWidth, videoHeight) {
+    const panelOffsets = [-threePanelSpread, 0, threePanelSpread];
+    const panelLabels = ['L', 'M', 'R'];
+
+    previewCtx.clearRect(0, 0, COMBINED_PANEL_WIDTH, PANEL_HEIGHT);
+    previewCtx.fillStyle = 'black';
+    previewCtx.fillRect(0, 0, COMBINED_PANEL_WIDTH, PANEL_HEIGHT);
+
+    for (let i = 0; i < panelOffsets.length; i++) {
+        renderPanelFrame(videoWidth, videoHeight, xOffset + panelOffsets[i]);
+        previewCtx.drawImage(panelCanvas, i * PANEL_WIDTH, 0);
+    }
+
+    previewCtx.strokeStyle = 'rgba(74, 144, 226, 0.8)';
+    previewCtx.lineWidth = 1;
+    for (let i = 1; i < 3; i++) {
+        const x = i * PANEL_WIDTH + 0.5;
+        previewCtx.beginPath();
+        previewCtx.moveTo(x, 0);
+        previewCtx.lineTo(x, PANEL_HEIGHT);
+        previewCtx.stroke();
+    }
+
+    previewCtx.font = 'bold 8px monospace';
+    previewCtx.textAlign = 'center';
+    previewCtx.textBaseline = 'top';
+    for (let i = 0; i < panelLabels.length; i++) {
+        previewCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        previewCtx.fillRect(i * PANEL_WIDTH, 0, PANEL_WIDTH, 10);
+        previewCtx.fillStyle = '#4a90e2';
+        previewCtx.fillText(panelLabels[i], i * PANEL_WIDTH + PANEL_WIDTH / 2, 1);
+    }
+}
 
 // Optimized preview update function with throttling
 function updatePreview() {
@@ -119,25 +201,29 @@ function updatePreview() {
     lastUpdateTime = now;
 
     try {
-        const crop = calculateCrop(video.videoWidth, video.videoHeight);
+        if (threePanelPreviewMode) {
+            drawThreePanelPreview(video.videoWidth, video.videoHeight);
+        } else {
+            const crop = calculateCrop(video.videoWidth, video.videoHeight);
 
-        // Clear the canvas before drawing to prevent trails
-        previewCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+            // Clear the canvas before drawing to prevent trails
+            previewCtx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
 
-        // Fill with black for letterboxing when zoomed out
-        if (zoom < 1.0) {
-            previewCtx.fillStyle = 'black';
-            previewCtx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+            // Fill with black for letterboxing when zoomed out
+            if (zoom < 1.0) {
+                previewCtx.fillStyle = 'black';
+                previewCtx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+            }
+
+            // Draw at panel resolution with crop
+            previewCtx.drawImage(video,
+                crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
+                crop.destX, crop.destY, crop.destWidth, crop.destHeight
+            );
+
+            // Process the frame
+            processFrame(previewCanvas, previewCtx);
         }
-
-        // Draw at panel resolution with crop
-        previewCtx.drawImage(video,
-            crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-            crop.destX, crop.destY, crop.destWidth, crop.destHeight
-        );
-
-        // Process the frame
-        processFrame(previewCanvas, previewCtx);
 
         // Handle ping pong for preview mode (when not streaming)
         if (pingPongMode && shouldLoop && !isStreaming && isPlayingBackward) {
@@ -998,29 +1084,29 @@ async function streamVideo() {
                         `Streaming... Clip: ${streamTimelinePosition.toFixed(1)}%`;
                 }
 
-                // Process frame using our shared function
-                const crop = calculateCrop(video.videoWidth, video.videoHeight);
-
-                // Clear the canvas before drawing to prevent trails
-                ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-
-                // Fill with black for letterboxing when zoomed out
-                if (zoom < 1.0) {
-                    ctx.fillStyle = 'black';
-                    ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
+                // Process frame and send to connected panels
+                if (threePanelPreviewMode) {
+                    const writePromises = PANEL_SLOTS
+                        .filter((slot) => writers[slot])
+                        .map((slot) => {
+                            const rgbData = renderPanelFrame(
+                                video.videoWidth,
+                                video.videoHeight,
+                                getThreePanelXOffset(slot)
+                            );
+                            return writeToPanel(writers[slot], rgbData);
+                        });
+                    await Promise.all(writePromises);
+                } else {
+                    const rgbData = renderPanelFrame(
+                        video.videoWidth,
+                        video.videoHeight,
+                        xOffset,
+                        canvas,
+                        ctx
+                    );
+                    await Promise.all(Object.values(writers).map((writer) => writeToPanel(writer, rgbData)));
                 }
-
-                // Draw with crop
-                ctx.drawImage(video,
-                    crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-                    crop.destX, crop.destY, crop.destWidth, crop.destHeight
-                );
-
-                // Process the frame using shared processor
-                const rgbData = processFrame(canvas, ctx);
-
-                // Send frame to all connected panels
-                await Promise.all(Object.values(writers).map((writer) => writeToPanel(writer, rgbData)));
 
                 frameCount++;
                 if (currentTime - lastFpsTime >= 1000) {
@@ -1445,6 +1531,23 @@ addSliderInputSync('yOffset', 'yOffsetInput',
     (value) => parseInt(value)
 );
 
+document.getElementById('threePanelPreview').onchange = (event) => {
+    threePanelPreviewMode = event.target.checked;
+    updatePreviewCanvasSize();
+    document.querySelector('.three-panel-spread-control').classList.toggle('active', threePanelPreviewMode);
+    const xOffsetLabel = document.querySelector('label[for="xOffset"]');
+    if (xOffsetLabel) {
+        xOffsetLabel.textContent = threePanelPreviewMode ? 'Center X Offset' : 'X Offset';
+    }
+    updateControls();
+};
+
+addSliderInputSync('threePanelSpread', 'threePanelSpreadInput',
+    (value) => { threePanelSpread = value; },
+    (value) => Math.round(value),
+    (value) => parseInt(value)
+);
+
 // Reset function to restore default values
 function resetControls() {
     // Reset all values to defaults
@@ -1523,6 +1626,18 @@ function resetControls() {
     document.getElementById('vignetteEnabled').checked = false;
     syncSliderInput('vignetteRadius', 'vignetteRadiusInput', 70);
     document.querySelector('.vignette-control').classList.remove('active');
+
+    // Reset 3-panel preview
+    threePanelPreviewMode = false;
+    threePanelSpread = 30;
+    document.getElementById('threePanelPreview').checked = false;
+    syncSliderInput('threePanelSpread', 'threePanelSpreadInput', 30);
+    document.querySelector('.three-panel-spread-control').classList.remove('active');
+    const xOffsetLabel = document.querySelector('label[for="xOffset"]');
+    if (xOffsetLabel) {
+        xOffsetLabel.textContent = 'X Offset';
+    }
+    updatePreviewCanvasSize();
 
     // Reset all sliders and their input fields
     syncSliderInput('contrast', 'contrastInput', 100);
@@ -1843,7 +1958,9 @@ addSliderInputSync('vignetteRadius', 'vignetteRadiusInput',
 );
 
 // Add this function back near the top with other utility functions
-function calculateCrop(videoWidth, videoHeight) {
+function calculateCrop(videoWidth, videoHeight, options = {}) {
+    const effectiveXOffset = options.xOffset !== undefined ? options.xOffset : xOffset;
+    const effectiveYOffset = options.yOffset !== undefined ? options.yOffset : yOffset;
     const videoAspect = videoWidth / videoHeight;
     const panelAspect = PANEL_WIDTH / PANEL_HEIGHT;
 
@@ -1908,8 +2025,8 @@ function calculateCrop(videoWidth, videoHeight) {
 
         // Apply offsets to destination when zoomed out
         // This moves the image within the panel
-        destX += (xOffset / 100) * PANEL_WIDTH * 0.5;
-        destY += (yOffset / 100) * PANEL_HEIGHT * 0.5;
+        destX += (effectiveXOffset / 100) * PANEL_WIDTH * 0.5;
+        destY += (effectiveYOffset / 100) * PANEL_HEIGHT * 0.5;
     }
 
     // Center the source area in the video
@@ -1919,8 +2036,8 @@ function calculateCrop(videoWidth, videoHeight) {
     // Apply user pan offsets
     if (zoom > 1.0) {
         // Zoomed in - pan within the video source
-        sourceX += (xOffset / 100 * (videoWidth - sourceWidth));
-        sourceY += (yOffset / 100 * (videoHeight - sourceHeight));
+        sourceX += (effectiveXOffset / 100 * (videoWidth - sourceWidth));
+        sourceY += (effectiveYOffset / 100 * (videoHeight - sourceHeight));
     } else if (zoom === 1.0) {
         // At exactly 100% zoom - use hybrid approach
         // Apply small source offset if possible
@@ -1928,17 +2045,17 @@ function calculateCrop(videoWidth, videoHeight) {
         const yPanRange = videoHeight - sourceHeight;
 
         if (xPanRange > 1) {
-            sourceX += (xOffset / 100 * xPanRange);
+            sourceX += (effectiveXOffset / 100 * xPanRange);
         } else {
             // No room to pan in source, use destination offset
-            destX += (xOffset / 100) * PANEL_WIDTH * 0.3;
+            destX += (effectiveXOffset / 100) * PANEL_WIDTH * 0.3;
         }
 
         if (yPanRange > 1) {
-            sourceY += (yOffset / 100 * yPanRange);
+            sourceY += (effectiveYOffset / 100 * yPanRange);
         } else {
             // No room to pan in source, use destination offset
-            destY += (yOffset / 100) * PANEL_HEIGHT * 0.3;
+            destY += (effectiveYOffset / 100) * PANEL_HEIGHT * 0.3;
         }
     }
     // For zoom < 1.0, offsets are already applied to destination above
