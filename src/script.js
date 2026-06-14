@@ -145,6 +145,60 @@ function renderPanelFrame(videoWidth, videoHeight, xOffsetOverride, targetCanvas
     return drawPanelCrop(crop, targetCanvas, targetCtx);
 }
 
+function getExportTargets() {
+    if (threePanelPreviewMode) {
+        return PANEL_SLOTS.map((slot) => ({
+            slot,
+            xOffset: getThreePanelXOffset(slot)
+        }));
+    }
+
+    return [{ slot: null, xOffset: xOffset }];
+}
+
+function getExportFilenameBase() {
+    const nameWithoutExt = originalFileName.split('.')[0];
+    const trimmedVideoDuration = getTrimDuration();
+    const durationInfo = `_${trimmedVideoDuration.toFixed(1)}s`;
+    const pingPongSuffix = pingPongMode ? '_pingpong' : '';
+    const speedSuffix = playbackSpeed !== 1.0 ? `_${playbackSpeed.toFixed(1)}x` : '';
+    const timelineSuffix = Timeline.tracks.length > 0 ? '_automation' : '';
+    return `${nameWithoutExt}${durationInfo}${speedSuffix}${pingPongSuffix}${timelineSuffix}`;
+}
+
+function triggerBinDownload(binData, filename) {
+    const blob = new Blob([binData], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function triggerBinDownloads(downloads) {
+    for (let i = 0; i < downloads.length; i++) {
+        triggerBinDownload(downloads[i].data, downloads[i].filename);
+        if (i < downloads.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+    }
+}
+
+function captureExportFrames(exportTargets, binBuffers, binOffsets) {
+    for (let i = 0; i < exportTargets.length; i++) {
+        const rgbData = renderPanelFrame(
+            video.videoWidth,
+            video.videoHeight,
+            exportTargets[i].xOffset
+        );
+        binBuffers[i].set(rgbData, binOffsets[i]);
+        binOffsets[i] += rgbData.length;
+    }
+}
+
 function drawThreePanelPreview(videoWidth, videoHeight) {
     const panelOffsets = [-threePanelSpread, 0, threePanelSpread];
     const panelLabels = ['L', 'M', 'R'];
@@ -3313,7 +3367,8 @@ async function convertToBinWithTimeline() {
     const speedInfo = playbackSpeed !== 1.0 ? ` at ${playbackSpeed.toFixed(1)}x speed` : '';
     const hasAutomation = Timeline.tracks.length > 0;
     const automationInfo = hasAutomation ? ' with automation' : '';
-    document.getElementById('status').textContent = `Converting video to binary${speedInfo}${automationInfo}...`;
+    const panelInfo = threePanelPreviewMode ? ' (3 panels)' : '';
+    document.getElementById('status').textContent = `Converting video to binary${speedInfo}${automationInfo}${panelInfo}...`;
 
     const maxFrames = Math.ceil(trimmedVideoDuration * TARGET_FPS * 10);
     let clipProgress = 0;
@@ -3332,8 +3387,9 @@ async function convertToBinWithTimeline() {
     const totalFrames = pingPongMode ? totalExportFrames * 2 : totalExportFrames;
     let currentFrame = 0;
 
-    const binData = new Uint8Array(totalFrames * FRAME_SIZE);
-    let binOffset = 0;
+    const exportTargets = getExportTargets();
+    const binBuffers = exportTargets.map(() => new Uint8Array(totalFrames * FRAME_SIZE));
+    const binOffsets = exportTargets.map(() => 0);
 
     const originalTime = video.currentTime;
     const wasPlaying = !video.paused;
@@ -3368,23 +3424,7 @@ async function convertToBinWithTimeline() {
 
             await seekToTime(percentToVideoTime(percent));
 
-            const crop = calculateCrop(video.videoWidth, video.videoHeight);
-            ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-
-            // Fill with black for letterboxing when zoomed out
-            if (zoom < 1.0) {
-                ctx.fillStyle = 'black';
-                ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-            }
-
-            ctx.drawImage(video,
-                crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-                crop.destX, crop.destY, crop.destWidth, crop.destHeight
-            );
-
-            const rgbData = processFrame(canvas, ctx);
-            binData.set(rgbData, binOffset);
-            binOffset += rgbData.length;
+            captureExportFrames(exportTargets, binBuffers, binOffsets);
 
             currentFrame++;
             const progress = Math.floor((currentFrame / totalFrames) * 100);
@@ -3407,23 +3447,7 @@ async function convertToBinWithTimeline() {
 
                 await seekToTime(percentToVideoTime(percent));
 
-                const crop = calculateCrop(video.videoWidth, video.videoHeight);
-                ctx.clearRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-
-                // Fill with black for letterboxing when zoomed out
-                if (zoom < 1.0) {
-                    ctx.fillStyle = 'black';
-                    ctx.fillRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT);
-                }
-
-                ctx.drawImage(video,
-                    crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-                    crop.destX, crop.destY, crop.destWidth, crop.destHeight
-                );
-
-                const rgbData = processFrame(canvas, ctx);
-                binData.set(rgbData, binOffset);
-                binOffset += rgbData.length;
+                captureExportFrames(exportTargets, binBuffers, binOffsets);
 
                 currentFrame++;
                 const progress = Math.floor((currentFrame / totalFrames) * 100);
@@ -3434,26 +3458,24 @@ async function convertToBinWithTimeline() {
 
 
 
-        // Create and download the binary file
-        const blob = new Blob([binData.slice(0, binOffset)], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
+        const filenameBase = getExportFilenameBase();
 
-        const nameWithoutExt = originalFileName.split('.')[0];
-        const durationInfo = `_${trimmedVideoDuration.toFixed(1)}s`;
-        const pingPongSuffix = pingPongMode ? '_pingpong' : '';
-        const speedSuffix = playbackSpeed !== 1.0 ? `_${playbackSpeed.toFixed(1)}x` : '';
-        const timelineSuffix = Timeline.tracks.length > 0 ? '_automation' : '';
-        a.download = `${nameWithoutExt}${durationInfo}${speedSuffix}${pingPongSuffix}${timelineSuffix}.bin`;
-
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        document.getElementById('status').className = 'success';
-        document.getElementById('status').textContent = 'Binary file downloaded!';
+        if (threePanelPreviewMode) {
+            const downloads = exportTargets.map((target, index) => ({
+                data: binBuffers[index].slice(0, binOffsets[index]),
+                filename: `${filenameBase}_${target.slot}.bin`
+            }));
+            await triggerBinDownloads(downloads);
+            document.getElementById('status').className = 'success';
+            document.getElementById('status').textContent = 'Downloaded 3 panel binary files (left, middle, right)!';
+        } else {
+            triggerBinDownload(
+                binBuffers[0].slice(0, binOffsets[0]),
+                `${filenameBase}.bin`
+            );
+            document.getElementById('status').className = 'success';
+            document.getElementById('status').textContent = 'Binary file downloaded!';
+        }
     } catch (error) {
         document.getElementById('status').className = 'error';
         document.getElementById('status').textContent = 'Error converting video: ' + error.message;
