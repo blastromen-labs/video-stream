@@ -2097,7 +2097,7 @@ const AUTOMATABLE_PARAMETERS = {
     'maskWidth': { min: 0, max: 100, default: 25, scale: 1 },
     'maskHeight': { min: 0, max: 100, default: 25, scale: 1 },
     'vignetteRadius': { min: 0, max: 100, default: 70, scale: 1 },
-    'playbackSpeed': { min: 0.1, max: 5, default: 1, scale: 100 }
+    'playbackSpeed': { min: 0.1, max: 8, default: 1, scale: 100 }
 };
 
 // Track class
