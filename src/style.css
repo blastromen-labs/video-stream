@@ -33,26 +33,64 @@ body {
     border: 2px solid transparent;
 }
 
-.navbar-controls #connectButton {
+.panel-connections {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.panel-slot {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 6px 4px 10px;
+    background: #333;
+    border-radius: 6px;
+    border: 1px solid #444;
+}
+
+.panel-slot-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #888;
+    min-width: 12px;
+    text-align: center;
+}
+
+.panel-slot .btn-panel-connect {
+    padding: 6px 12px;
+    font-size: 12px;
     background-color: #4a90e2;
     color: white;
-    border-color: #4a90e2;
+    border: 2px solid #4a90e2;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
-.navbar-controls #connectButton:hover {
+.panel-slot .btn-panel-connect:hover {
     background-color: #357abd;
     border-color: #357abd;
-    transform: translateY(-1px);
 }
 
-.navbar-controls #connectButton.connected {
-    background-color: #f44336;
-    border-color: #f44336;
+.panel-slot .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #444;
+    border: 1px solid #555;
+    flex-shrink: 0;
 }
 
-.navbar-controls #connectButton.connected:hover {
-    background-color: #d32f2f;
-    border-color: #d32f2f;
+.panel-slot .status-dot.connected {
+    background: #4caf50;
+    border-color: #4caf50;
+    box-shadow: 0 0 6px #4caf50;
+}
+
+.panel-slot.connected {
+    border-color: rgba(76, 175, 80, 0.35);
 }
 
 .navbar-controls #streamButton {

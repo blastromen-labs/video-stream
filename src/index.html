@@ -10,7 +10,23 @@
 <body>
     <nav class="navbar">
         <div class="navbar-controls">
-            <button id="connectButton">Connect to Teensy</button>
+            <div class="panel-connections">
+                <div class="panel-slot" id="panelSlotLeft">
+                    <span class="panel-slot-label">L</span>
+                    <span class="status-dot" id="statusDotLeft"></span>
+                    <button class="btn-panel-connect" data-panel="left">Connect</button>
+                </div>
+                <div class="panel-slot" id="panelSlotMiddle">
+                    <span class="panel-slot-label">M</span>
+                    <span class="status-dot" id="statusDotMiddle"></span>
+                    <button class="btn-panel-connect" data-panel="middle">Connect</button>
+                </div>
+                <div class="panel-slot" id="panelSlotRight">
+                    <span class="panel-slot-label">R</span>
+                    <span class="status-dot" id="statusDotRight"></span>
+                    <button class="btn-panel-connect" data-panel="right">Connect</button>
+                </div>
+            </div>
             <input type="file" id="fileInput" accept="video/mp4,video/quicktime" />
             <button id="streamButton" disabled>Start Streaming</button>
             <button id="resetButton" class="reset-button">Reset</button>
@@ -243,8 +259,8 @@
                                 </label>
                                 <div class="slider-row">
                                     <label for="playbackSpeed">Playback Speed</label>
-                                    <input type="range" id="playbackSpeed" min="10" max="300" value="100" step="10">
-                                    <input type="number" id="playbackSpeedInput" min="10" max="300" value="100"
+                                    <input type="range" id="playbackSpeed" min="10" max="500" value="100" step="10">
+                                    <input type="number" id="playbackSpeedInput" min="10" max="500" value="100"
                                         step="10" class="value-input">
                                 </div>
 
@@ -384,14 +400,6 @@
                 <button id="saveTimelineButton" class="timeline-button">Save Timeline</button>
                 <button id="loadTimelineButton" class="timeline-button">Load Timeline</button>
                 <input type="file" id="timelineFileInput" accept=".json" style="display: none;">
-                <div class="timeline-length-control" style="display: flex; align-items: center; gap: 10px;">
-                    <label style="font-size: 12px; color: #ccc;">Length:</label>
-                    <input type="number" id="timelineLength" step="0.1" min="0.1"
-                        style="width: 60px; padding: 4px; background: #2a2a2a; border: 1px solid #444; color: #fff; border-radius: 4px; font-size: 12px;">
-                    <span style="font-size: 12px; color: #ccc;">s</span>
-                    <button id="resetTimelineLength" class="timeline-button"
-                        style="padding: 4px 8px; font-size: 11px;">Reset to Trim</button>
-                </div>
                 <div class="timeline-zoom-controls">
                     <label>Zoom:</label>
                     <input type="range" id="timelineZoom" class="timeline-zoom-slider" min="0.5" max="5" step="0.1"
@@ -424,8 +432,8 @@
         <div class="keyframe-editor-header">Edit Keyframe</div>
         <div class="keyframe-editor-content">
             <div class="keyframe-input-group">
-                <label>Time (s):</label>
-                <input type="number" id="keyframeTime" step="0.1" min="0">
+                <label>Position (%):</label>
+                <input type="number" id="keyframeTime" step="0.1" min="0" max="100">
             </div>
             <div class="keyframe-input-group">
                 <label>Value:</label>
@@ -438,6 +446,7 @@
                     <option value="ease-in">Ease In</option>
                     <option value="ease-out">Ease Out</option>
                     <option value="ease-in-out">Ease In-Out</option>
+                    <option value="instant">Instant</option>
                 </select>
             </div>
         </div>
@@ -461,11 +470,10 @@
                 <li><strong>Show Timeline:</strong> Click "Show Timeline" button to open the timeline panel</li>
                 <li><strong>Add Track:</strong> Click "Add Track" and select a parameter to automate (e.g., Zoom, Hue, X
                     Offset)</li>
-                <li><strong>Add Keyframes:</strong> Double-click on a track to add a keyframe at that time</li>
+                <li><strong>Add Keyframes:</strong> Double-click on a track to add a keyframe at that clip position</li>
                 <li><strong>Edit Keyframes:</strong> Right-click on a keyframe to edit its value and easing</li>
-                <li><strong>Drag Keyframes:</strong> Click and drag keyframes to change their timing</li>
-                <li><strong>Timeline Length:</strong> Set a custom timeline duration to create animations longer than
-                    your video - the video will loop!</li>
+                <li><strong>Drag Keyframes:</strong> Click and drag keyframes to change their position in the clip</li>
+                <li><strong>Clip-Based:</strong> The timeline runs from 0% to 100% of your trimmed clip and loops with the video</li>
                 <li><strong>Zoom Timeline:</strong> Use the zoom slider to see more or less detail</li>
                 <li><strong>Preview:</strong> Play the video to see your automation in action</li>
                 <li><strong>Export:</strong> Click "Download .bin" to export with timeline automation applied</li>
@@ -475,10 +483,9 @@
             <ul style="color: #ccc; font-size: 14px; line-height: 1.8;">
                 <li>Multiple parameters can be automated simultaneously</li>
                 <li>Easing options (Linear, Ease In/Out) create smooth transitions</li>
-                <li>Click on the timeline ruler to jump to specific times</li>
-                <li>The red playhead shows current timeline position</li>
-                <li>Extend timeline duration to create evolving loops - perfect for generative animations!</li>
-                <li>Timeline length is saved/loaded with your preset files</li>
+                <li>Click on the timeline ruler to jump to a position in the clip</li>
+                <li>The red playhead shows your current position as a percentage through the clip</li>
+                <li>When the clip loops, the timeline resets to 0%</li>
                 <li>Exported files will have "_timeline" suffix when automation is used</li>
             </ul>
         </div>
